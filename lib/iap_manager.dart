@@ -1,7 +1,7 @@
-library iap_manager;
+// This model is taken from:
+// https://dart.dev/guides/libraries/create-library-packages
 
-/// A Calculator.
-class Calculator {
-  /// Returns [value] plus 1.
-  int addOne(int value) => value + 1;
-}
+export 'src/iap-manager.dart';
+export 'src/iap-plugin-3p-wrapper.dart';
+export 'src/platform-wrapper.dart';
+export 'src/store-state.dart';
