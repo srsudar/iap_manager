@@ -65,11 +65,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   /// is invoked when notifyListeners is invoked.
   void Function() _notifyListenersInvokedCallback;
 
-  /// Processing is different for items that are subscriptions. There is no
-  /// way to tell without checking product IDs etc. This is provided to
-  /// callers to be able to control when an item is a subscription.
-  bool Function(PurchasedItem item) _itemIsSubscriptionCallback;
-
   /// If this is false, then the plugin can't be used. The plugin throws
   /// errors if initConnection didn't complete.
   bool _cxnIsInitialized = false;
@@ -83,17 +78,14 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   bool get shouldShowAds => _calculateShouldShowAds();
   String get pluginErrorMsg => _pluginErrorMsg;
 
-  /// This should be considered a singleton, managed by Provider.
   IAPManager(
     this._plugin,
     this._iosSharedSecret,
     this._storeState,
-    initialShouldShowAds, {
+    initialShouldShowAds,
     void Function() notifyListenersInvokedCallback,
-    bool Function(PurchasedItem) itemIsSubscriptionCallback,
     PlatformWrapper platformWrapper,
-  }) : _itemIsSubscriptionCallback =
-            itemIsSubscriptionCallback ?? ((item) => false) {
+  ) {
     _preLoadedShouldShowAds = initialShouldShowAds;
 
     _notifyListenersInvokedCallback = notifyListenersInvokedCallback;
@@ -102,19 +94,18 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     initialize();
   }
 
+  @visibleForTesting
   IAPManager.forTestingDoNotCallInitialize(
     this._plugin,
     this._iosSharedSecret,
     this._storeState,
     initialShouldShowAds,
     PlatformWrapper _platformWrapper,
-    bool Function(PurchasedItem) isSubCb,
   ) {
     _preLoadedShouldShowAds = initialShouldShowAds;
     _isLoaded = true;
     _cxnIsInitialized = true;
     this._platformWrapper = _platformWrapper;
-    _itemIsSubscriptionCallback = isSubCb;
   }
 
   /// This calls notifyListeners and also informs callers when
@@ -343,7 +334,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
         item.transactionStateIOS == TransactionState.restored) {
       // Apple says to finishTransaction after validation:
       // https://developer.apple.com/documentation/storekit/skpaymentqueue/1506003-finishtransaction
-      if (_itemIsSubscriptionCallback(item)) {
+      if (_storeState.itemIsSubscription(item)) {
         if (!iosValidatedSubProductIDs.contains(item.productId)) {
           // Subscriptions are special cased on iOS.
           debugPrint('IAPManager._handlePurchaseIOS: found subscription, '

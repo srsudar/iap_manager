@@ -94,10 +94,6 @@ class _MockedIAPItems {
 }
 
 abstract class PurchaseSKUs {
-  static bool isSubscription(PurchasedItem item) {
-    return item != null && item.productId == 'remove_ads_oneyear';
-  }
-
   String getRemoveAdsForever();
   String getRemoveAdsOneYear();
 }
@@ -326,7 +322,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
-      platformWrapper: PlatformWrapper.android(),
+      null,
+      PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
@@ -421,7 +418,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.android()),
       false,
-      platformWrapper: PlatformWrapper.android(),
+      null,
+      PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
@@ -495,7 +493,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
-      platformWrapper: PlatformWrapper.android(),
+      null,
+      PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
@@ -554,7 +553,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.android()),
       false,
-      platformWrapper: PlatformWrapper.android(),
+      null,
+      PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
@@ -629,7 +629,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
       PlatformWrapper.android(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -691,7 +690,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
       PlatformWrapper.android(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -753,7 +751,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
       PlatformWrapper.android(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -814,7 +811,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.ios()),
       true,
       PlatformWrapper.ios(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -876,7 +872,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.ios()),
       true,
       PlatformWrapper.ios(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -992,7 +987,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.ios()),
       true,
       PlatformWrapper.ios(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -1097,7 +1091,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.ios()),
       false,
       PlatformWrapper.ios(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -1201,7 +1194,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.ios()),
       false,
       PlatformWrapper.ios(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -1387,7 +1379,6 @@ void main() {
         TestStoreState.defaultState(PlatformWrapper.ios()),
         false,
         PlatformWrapper.ios(),
-        PurchaseSKUs.isSubscription,
       );
 
       expect(mgr.isLoaded, isTrue);
@@ -1456,7 +1447,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.android()),
       false,
       PlatformWrapper.android(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -1495,7 +1485,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.android()),
       false,
       PlatformWrapper.android(),
-      PurchaseSKUs.isSubscription,
     );
 
     await mgr.getPurchaseHistory(true);
@@ -1525,7 +1514,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
       PlatformWrapper.android(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -1580,7 +1568,6 @@ void main() {
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
       PlatformWrapper.android(),
-      PurchaseSKUs.isSubscription,
     );
 
     expect(mgr.isLoaded, isTrue);
@@ -1656,7 +1643,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.android()),
       initialShouldShowAds,
-      platformWrapper: PlatformWrapper.android(),
+      null,
+      PlatformWrapper.android(),
     );
 
     TestUtil.waitUntilTrue(() => !mgr.isStillInitializing);
@@ -1766,7 +1754,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.android()),
       initialShouldShowAds,
-      platformWrapper: PlatformWrapper.android(),
+      null,
+      PlatformWrapper.android(),
     );
 
     await mgr.waitForInitialized();
@@ -1858,7 +1847,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
-      platformWrapper: PlatformWrapper.android(),
+      null,
+      PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
@@ -1960,7 +1950,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.ios()),
       true,
-      platformWrapper: PlatformWrapper.ios(),
+      null,
+      PlatformWrapper.ios(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
@@ -2048,7 +2039,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
-      platformWrapper: PlatformWrapper.android(),
+      null,
+      PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
@@ -2138,7 +2130,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
-      platformWrapper: PlatformWrapper.android(),
+      null,
+      PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
@@ -2254,8 +2247,8 @@ void main() {
       'foo',
       TestStoreState.defaultState(PlatformWrapper.android()),
       true,
-      notifyListenersInvokedCallback: notifyListenersCallback,
-      platformWrapper: PlatformWrapper.android(),
+      notifyListenersCallback,
+      PlatformWrapper.android(),
     );
 
     await mgr.waitForInitialized();

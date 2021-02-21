@@ -174,4 +174,14 @@ abstract class StateFromStore {
 
   /// get a list of subscription IDs. This should be platform-aware.
   List<String> getSubscriptionProductIDs();
+
+  /// Processing is different for items that are subscriptions. There is no
+  /// way to tell without checking product IDs, as far as I know. This is
+  /// provided to callers to be able to control when an item is a subscription.
+  /// This naive implementation just checks if the productID is included in
+  /// getSubscriptionProductIDs, but this is included to allow more complext
+  /// implementations.
+  bool itemIsSubscription(PurchasedItem item) {
+    return getSubscriptionProductIDs().contains(item.productId);
+  }
 }
