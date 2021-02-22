@@ -49,8 +49,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   final String _iosSharedSecret;
   T _storeState;
   bool _isLoaded = false;
-  bool _hasFetchedAvailableProducts = false;
-  bool _hasFetchedPurchases = false;
   bool _subscribedToStreams = false;
   // This is a live value that we expose as we receive updates.
   bool _preLoadedShouldShowAds = true;
@@ -71,8 +69,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
 
   T get storeState => _storeState;
   bool get isLoaded => _isLoaded;
-  bool get hasFetchedAvailableProducts => _hasFetchedAvailableProducts;
-  bool get hasFetchedPurchases => _hasFetchedPurchases;
   bool get isStillInitializing => _isStillInitializing;
   bool get hasPluginError => _pluginErrorMsg != null;
   bool get shouldShowAds => _calculateShouldShowAds();
@@ -110,9 +106,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   }
 
   bool _calculateShouldShowAds() {
-    if (!_hasFetchedPurchases) {
-      return _preLoadedShouldShowAds;
-    }
     return _storeState.shouldShowAds(_preLoadedShouldShowAds);
   }
 
@@ -532,7 +525,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
       }
       _storeState = _storeState.setNotOwnedExcept(handledPurchaseIDs);
       debugPrint('IAPManager: new state: $_storeState');
-      _hasFetchedPurchases = true;
     } catch (e) {
       debugPrint('getPurchaseHistory: ugly universal catch block: $e');
       _pluginErrorMsg = e.toString();
@@ -574,8 +566,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
       for (IAPItem item in items) {
         _storeState = _storeState.takeAvailableProduct(item);
       }
-
-      _hasFetchedAvailableProducts = true;
     } catch (e) {
       debugPrint('IAPManager.getAvailableProducts: ugly universal catch: $e');
       _pluginErrorMsg = e.toString();

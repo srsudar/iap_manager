@@ -574,7 +574,6 @@ void main() {
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
-    expect(mgr.hasFetchedPurchases, isFalse);
     expect(mgr.shouldShowAds, isFalse);
 
     expect(mgr.storeState.noAdsForever.getTitle(), equals('Title One Time'));
@@ -650,7 +649,6 @@ void main() {
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
     expect(mgr.shouldShowAds, isFalse);
-    expect(mgr.hasFetchedPurchases, isTrue);
 
     // Both of these are empty b/c we couldn't get the deets from the store.
     expect(mgr.storeState.noAdsForever.getTitle(), equals(''));
@@ -712,13 +710,11 @@ void main() {
     // there is a problem.
     await mgr.getPurchaseHistory(true);
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isFalse);
     expect(mgr.shouldShowAds, isFalse);
     expect(mgr.pluginErrorMsg, contains('error init cxn'));
 
     await mgr.getAvailableProducts(true);
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedAvailableProducts, isFalse);
     expect(mgr.shouldShowAds, isFalse);
     expect(mgr.pluginErrorMsg, contains('error init cxn'));
 
@@ -778,7 +774,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
     expect(mgr.shouldShowAds, isTrue);
@@ -844,7 +839,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isOwned);
     expect(mgr.shouldShowAds, isFalse);
@@ -910,7 +904,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
     expect(mgr.shouldShowAds, isFalse);
@@ -975,7 +968,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
     expect(mgr.shouldShowAds, isFalse);
@@ -1041,7 +1033,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
     expect(mgr.shouldShowAds, isTrue);
@@ -1161,7 +1152,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isOwned);
     expect(mgr.shouldShowAds, isFalse);
@@ -1270,7 +1260,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
     // We should show ads--started without ads, expired sub removed it.
@@ -1378,7 +1367,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
     // We should show ads--started without ads, expired sub removed it.
@@ -1567,7 +1555,6 @@ void main() {
       await result;
 
       expect(mgr.isLoaded, isTrue);
-      expect(mgr.hasFetchedPurchases, true);
       expect(mgr.storeState.noAdsForever.owned, isNotOwned);
       expect(
           mgr.storeState.noAdsOneYear.owned, equals(testCase.wantOwnedState));
@@ -1636,7 +1623,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
     expect(mgr.shouldShowAds, isTrue);
@@ -1669,7 +1655,6 @@ void main() {
     expect(mgr.storeState.noAdsForever.owned, isUnknown);
     expect(mgr.storeState.noAdsOneYear.owned, isUnknown);
 
-    expect(mgr.hasFetchedPurchases, isFalse);
     expect(mgr.pluginErrorMsg, contains('expected error'));
   });
 
@@ -1712,7 +1697,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedAvailableProducts, isTrue);
     expect(mgr.shouldShowAds, isTrue);
 
     TestStoreState got = mgr.storeState;
@@ -1773,7 +1757,6 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedAvailableProducts, isTrue);
     expect(mgr.pluginErrorMsg, contains('error in subs'));
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
@@ -2453,7 +2436,6 @@ void main() {
     expect(ackedAndroid, true);
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isOwned);
     expect(mgr.shouldShowAds, isFalse);
