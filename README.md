@@ -1,14 +1,186 @@
 # iap_manager
 
-A new Flutter package project.
+> Manage your Flutter In-App Purchases.
+
+## Warning: not yet tested in production
+
+I have not yet tested this library in my own production app. I plan to, but I
+haven't yet done so. When I am satisfied that it works I will remove this
+warning.
+
+## Overview
+
+This package helps manage In-App Purchases (IAPs) in Flutter apps. It **does not
+provide any native platform code**. Interacting with the Google Play (on
+Android) and App Store (on iOS) APIs is handled by the
+[flutter_inapp_purchase](https://pub.dev/packages/flutter_inapp_purchase)
+plugin.
+
+When I started adding IAPs to my app, even with the above plugin, it was hard.
+There is a lot of state management to get right. This package shows how I have
+done it. Hopefully it is correct and can be useful to others.
+
+If you find problems or have usability suggestions, please open issues or submit
+pull requests!
 
 ## Getting Started
 
-This project is a starting point for a Dart
-[package](https://flutter.dev/developing-packages/),
-a library module containing code that can be shared easily across
-multiple Flutter or Dart projects.
+### Set Up In-App Purchases
 
-For help getting started with Flutter, view our 
-[online documentation](https://flutter.dev/docs), which offers tutorials, 
-samples, guidance on mobile development, and a full API reference.
+Follow the instructions at
+[flutter_inapp_purchase](https://pub.dev/packages/flutter_inapp_purchase) to
+enable IAPs for your apps. They have a [blog
+post](https://medium.com/codechai/flutter-in-app-purchase-7a3fb9345e2a) that is
+helpful. You'll also need the proguard rules for when you build a release
+version.
+
+On iOS, if you have subscriptions, you'll also need an "App-Specific Shared
+Secret" that serves as a password for Apple's validation server. This is on [App
+Store Connect](https://appstoreconnect.apple.com/apps). Click on your app and go
+to `In-App Purchase | Manage`, and there above the list of purchases you'll see
+"App-Specific Shared Secret". Click that, generate a secret, and save it.
+
+### Classes
+
+#### `IAPManager`
+
+The main class this package provides is the `IAPManager`. It is a
+[`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html),
+which will hopefully make it easy for you to integrate into your app.
+
+#### `InAppProduct`
+
+`InAppProduct` represents a product that you have for sale. All you need to
+provide is a SKU (a product ID). The rest of the required information (title,
+description, price, ownership status) comes from the store.
+
+#### `StateFromStore`
+
+`StateFromStore` is your app's local view of a user's IAP state. It contains the
+title and description of your items, and an error message (if something went
+wrong communicating with the store, eg).
+
+### Integrating iap_manager Into Your App
+
+#### 1. Define Your Store State
+
+Start by defining your store state. You do this by extending `StateFromStore`.
+An example is shown in the test file.
+
+This class shows that we have two products: a one-time purchase that removes ads
+forever, and a subscription that removes ads for one year.
+
+```dart
+class TestStoreState extends StateFromStore {
+  final InAppProduct noAdsForever;
+  final InAppProduct noAdsOneYear;
+
+  TestStoreState(this.noAdsForever, this.noAdsOneYear, PurchaseResult lastError)
+      : super(lastError);
+
+  <snip>
+```
+
+#### 2. Extend `IAPManager`
+
+`IAPManager` is a parameterized object. You can use it right away like this:
+
+**I avoid this:**
+
+```dart
+IAPManager<TestStoreState> iap = IAPManager<TestStoreState>(...);
+```
+
+This can be error-prone, though, and lead to runtime failures. Dart is
+permissive, so you can also do this:
+
+**I avoid this:**
+
+```dart
+// Note that we're not parameterizing the declared type here (no
+// <TestStoreState>).
+IAPManager iap = IAPManager<TestStoreState>(...);
+```
+
+This is perfectly valid dart. However, it can lead to runtime errors if you use
+that bare type in a Provider. Provider will look for a type
+`IAPManager<StateFromStore>`, which it might not find, and could lead to errors.
+
+Instead, I like to subclass `IAPManager` so that I can't commit that error.
+
+**I prefer this**:
+
+```dart
+class TestIAPManager extends IAPManager<TestStoreState> {
+  TestIAPManager(
+    IAPPlugin3PWrapper plugin,
+    String iosSharedSecret,
+    TestStoreState storeState,
+    bool initialShouldShowAds,
+    void Function() notifyListenersInvokedCallback,
+    PlatformWrapper platformWrapper,
+  ) : super(
+          plugin,
+          iosSharedSecret,
+          storeState,
+          initialShouldShowAds,
+          notifyListenersInvokedCallback,
+          platformWrapper,
+        );
+}
+```
+
+Now you can just use `TestIAPManager` without worrying about parameterizing it
+properly every time.
+
+#### 3. Wire It Into Your App
+
+I use `Provider` to manage state in my app. The root widget of my app looks more
+or less like what is shown below. Note that the `AdManager` class isn't included
+in this package. It is used an example, and is responsible for simply showing or
+hiding a banner ad based on the `shouldShowAds` property of `TestIAPManager`.
+It's API looks like this:
+
+```dart
+class AdManager {
+  showBannderAd();
+  hideBannerAd();
+}
+```
+
+This is the root function of an app that uses iap_manager:
+
+```dart
+  bool initialShouldShowAds = await dataStore.getLastKnownShowAds();
+
+  return MultiProvider(
+    providers: [
+      Provider<AdManager>(
+        create: (_) {
+          return AdManager();
+        },
+        dispose: (ctx, mgr) => mgr.dispose(),
+        lazy: false,
+      ),
+      ChangeNotifierProvider<TestIAPManager>(
+        create: (_) {
+          return TestIAPManager(
+            IAPPlugin3PWrapper(),
+            IOS_APP_SECRET,
+            TestStoreState.defaultState(),
+            initialShouldShowAds,
+            null,
+            PlatformWrapper(),
+          );
+        },
+        // We want this created on app start, so that we have the most up
+        // to date purchases right away. This will prevent us from still
+        // showing ads if someone closed an app before the purchase
+        // completed, eg. And it should be fast, b/c Play Services should
+        // cache the results for us.
+        lazy: false,
+      ),
+   ],
+   child: MyApp(),
+ );
+```
