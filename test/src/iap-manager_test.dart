@@ -113,14 +113,12 @@ class TestIAPManager extends IAPManager<TestStoreState> {
     IAPPlugin3PWrapper plugin,
     String iosSharedSecret,
     TestStoreState storeState,
-    initialShouldShowAds,
     void Function() notifyListenersInvokedCallback,
     PlatformWrapper platformWrapper,
   ) : super(
           plugin,
           iosSharedSecret,
           storeState,
-          initialShouldShowAds,
           notifyListenersInvokedCallback,
           platformWrapper,
         );
@@ -130,18 +128,22 @@ class TestStoreState extends StateFromStore {
   final InAppProduct noAdsForever;
   final InAppProduct noAdsOneYear;
   final PurchaseResult lastError;
+  final bool initialShouldShowAds;
 
-  TestStoreState(this.noAdsForever, this.noAdsOneYear, this.lastError)
+  TestStoreState(this.initialShouldShowAds, this.noAdsForever,
+      this.noAdsOneYear, this.lastError)
       : super(lastError);
 
-  static TestStoreState defaultState(PlatformWrapper platformWrapper) {
+  static TestStoreState defaultState(
+      bool initialShouldShowAds, PlatformWrapper platformWrapper) {
     if (platformWrapper.isIOS) {
       PurchaseSKUs ios = PurchaseSKUsIOS();
       InAppProduct noAdsForever =
           InAppProduct.defaultSate(ios.getRemoveAdsForever());
       InAppProduct noAdsOneYear =
           InAppProduct.defaultSate(ios.getRemoveAdsOneYear());
-      return TestStoreState(noAdsForever, noAdsOneYear, null);
+      return TestStoreState(
+          initialShouldShowAds, noAdsForever, noAdsOneYear, null);
     }
 
     PurchaseSKUs android = PurchaseSKUsAndroid();
@@ -150,7 +152,7 @@ class TestStoreState extends StateFromStore {
     InAppProduct noAdsOneYear =
         InAppProduct.defaultSate(android.getRemoveAdsOneYear());
     TestStoreState androidState =
-        TestStoreState(noAdsForever, noAdsOneYear, null);
+        TestStoreState(initialShouldShowAds, noAdsForever, noAdsOneYear, null);
     if (platformWrapper.isAndroid) {
       return androidState;
     }
@@ -173,13 +175,14 @@ class TestStoreState extends StateFromStore {
   }
 
   StateFromStore dismissError() {
-    return TestStoreState(noAdsForever, noAdsOneYear, null);
+    return TestStoreState(
+        initialShouldShowAds, noAdsForever, noAdsOneYear, null);
   }
 
   /// Return true if we should show ads. Will return previous state if the ad
   /// state can't be determined by this state alone (eg if purchases have
   /// not yet been fetched.
-  bool shouldShowAds(bool previousState) {
+  bool shouldShowAds() {
     if (noAdsForever.isOwned() || noAdsOneYear.isOwned()) {
       // We own either, so it's ok to return false.
       return false;
@@ -190,25 +193,28 @@ class TestStoreState extends StateFromStore {
     }
     if (noAdsForever.isUnknownPurchaseState() ||
         noAdsOneYear.isUnknownPurchaseState()) {
-      return previousState;
+      return initialShouldShowAds;
     }
 
     // This is an error state.
     debugPrint('impossible ownership state: $noAdsForever, $noAdsOneYear');
-    return previousState;
+    return initialShouldShowAds;
   }
 
   StateFromStore takeAvailableProduct(IAPItem item) {
     if (item.productId == noAdsForever?.sku) {
       InAppProduct updated = noAdsForever.withProductInfo(item);
-      return TestStoreState(updated, noAdsOneYear, lastError);
+      return TestStoreState(
+          initialShouldShowAds, updated, noAdsOneYear, lastError);
     }
     if (item.productId == noAdsOneYear?.sku) {
       InAppProduct updated = noAdsOneYear.withProductInfo(item);
-      return TestStoreState(noAdsForever, updated, lastError);
+      return TestStoreState(
+          initialShouldShowAds, noAdsForever, updated, lastError);
     }
     debugPrint('unrecognized item from store: ${item?.productId}');
-    return TestStoreState(noAdsForever, noAdsOneYear, lastError);
+    return TestStoreState(
+        initialShouldShowAds, noAdsForever, noAdsOneYear, lastError);
   }
 
   StateFromStore takePurchase(PurchasedItem item, {String errMsg = ''}) {
@@ -225,18 +231,20 @@ class TestStoreState extends StateFromStore {
 
   /// This is used for setting purchases in a known not purchased state.
   StateFromStore setNotOwnedExcept(Set<String> ignoreTheseIDs) {
-    TestStoreState result =
-        TestStoreState(noAdsForever, noAdsOneYear, lastError);
+    TestStoreState result = TestStoreState(
+        initialShouldShowAds, noAdsForever, noAdsOneYear, lastError);
     if (noAdsForever != null && !ignoreTheseIDs.contains(noAdsForever.sku)) {
       // Then we don't own this.
       InAppProduct updated =
           noAdsForever.withOwnedState(OwnedState.NOT_OWNED, '');
-      result = TestStoreState(updated, result.noAdsOneYear, result.lastError);
+      result = TestStoreState(
+          initialShouldShowAds, updated, result.noAdsOneYear, result.lastError);
     }
     if (noAdsOneYear != null && !ignoreTheseIDs.contains(noAdsOneYear.sku)) {
       InAppProduct updated =
           noAdsOneYear.withOwnedState(OwnedState.NOT_OWNED, '');
-      result = TestStoreState(result.noAdsForever, updated, result.lastError);
+      result = TestStoreState(
+          initialShouldShowAds, result.noAdsForever, updated, result.lastError);
     }
 
     return result;
@@ -247,18 +255,22 @@ class TestStoreState extends StateFromStore {
     if (noAdsForever != null && item.productId == noAdsForever.sku) {
       // Nothing changes except the purchase state.
       InAppProduct updated = noAdsForever.withOwnedState(owned, errMsg);
-      return TestStoreState(updated, noAdsOneYear, lastError);
+      return TestStoreState(
+          initialShouldShowAds, updated, noAdsOneYear, lastError);
     }
     if (noAdsOneYear != null && item.productId == noAdsOneYear.sku) {
       InAppProduct updated = noAdsOneYear.withOwnedState(owned, errMsg);
-      return TestStoreState(noAdsForever, updated, lastError);
+      return TestStoreState(
+          initialShouldShowAds, noAdsForever, updated, lastError);
     }
     debugPrint('unrecognized item from store: ${item?.productId}');
-    return TestStoreState(noAdsForever, noAdsOneYear, lastError);
+    return TestStoreState(
+        initialShouldShowAds, noAdsForever, noAdsOneYear, lastError);
   }
 
   StateFromStore takeError(PurchaseResult result) {
-    return TestStoreState(noAdsForever, noAdsOneYear, result);
+    return TestStoreState(
+        initialShouldShowAds, noAdsForever, noAdsOneYear, result);
   }
 
   @override
@@ -287,7 +299,6 @@ class TestStoreState extends StateFromStore {
 TestIAPManager _buildNeedsInitializeIAPManager({
   IAPPlugin3PWrapper mockedPlugin,
   String iosSecret,
-  bool initialShouldShowAds,
   TestStoreState initialState,
   // We only call these three methods b/c these three methods are what we
   // need in initialize for a bare load.
@@ -327,7 +338,6 @@ TestIAPManager _buildNeedsInitializeIAPManager({
     mockedPlugin,
     iosSecret,
     initialState,
-    initialShouldShowAds,
     null,
     platformWrapper,
   );
@@ -339,7 +349,6 @@ TestIAPManager _buildNeedsInitializeIAPManager({
 TestIAPManager _buildInitializingIAPManager({
   IAPPlugin3PWrapper mockedPlugin,
   String iosSecret,
-  bool initialShouldShowAds,
   TestStoreState initialState,
   // We only call these three methods b/c these three methods are what we
   // need in initialize for a bare load.
@@ -394,7 +403,6 @@ TestIAPManager _buildInitializingIAPManager({
     mockedPlugin,
     iosSecret,
     initialState,
-    initialShouldShowAds,
     null,
     platformWrapper,
   );
@@ -454,17 +462,16 @@ void main() {
         .thenAnswer((realInvocation) => subs.future);
 
     // let it begin...
-    IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
+    TestIAPManager mgr = TestIAPManager(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
+      TestStoreState.defaultState(true, PlatformWrapper.android()),
       null,
       PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     // And now, while we're still blocked on initConnection, add some
     // completers.
@@ -477,7 +484,7 @@ void main() {
     initResult.complete('cxn is live');
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     pluginGetPurchaseHistoryResult.complete([alreadyAckedAndroid]);
 
@@ -490,7 +497,7 @@ void main() {
 
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     blockForPurchases.complete();
 
@@ -501,7 +508,7 @@ void main() {
 
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     blockForProducts.complete();
 
@@ -509,7 +516,7 @@ void main() {
 
     expect(mgr.storeState.noAdsForever.getTitle(), equals('Title One Time'));
     expect(mgr.storeState.noAdsOneYear.getTitle(), equals('Title One Year'));
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
@@ -553,19 +560,18 @@ void main() {
     IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      false,
+      TestStoreState.defaultState(false, PlatformWrapper.android()),
       null,
       PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     initResult.complete('cxn is live');
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     pluginGetPurchaseHistoryResult
         .completeError(Exception('getPurchaseHistory error'));
@@ -574,7 +580,7 @@ void main() {
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     expect(mgr.storeState.noAdsForever.getTitle(), equals('Title One Time'));
     expect(mgr.storeState.noAdsOneYear.getTitle(), equals('Title One Year'));
@@ -627,20 +633,19 @@ void main() {
     IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
+      TestStoreState.defaultState(true, PlatformWrapper.android()),
       null,
       PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     initResult.complete('cxn is live');
 
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     pluginGetPurchaseHistoryResult.complete([alreadyAckedAndroid]);
 
@@ -648,7 +653,7 @@ void main() {
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     // Both of these are empty b/c we couldn't get the deets from the store.
     expect(mgr.storeState.noAdsForever.getTitle(), equals(''));
@@ -686,14 +691,13 @@ void main() {
     IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      false,
+      TestStoreState.defaultState(false, PlatformWrapper.android()),
       null,
       PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     initResult.completeError(Exception('error init cxn'));
 
@@ -701,7 +705,7 @@ void main() {
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     expect(mgr.pluginErrorMsg, contains('error init cxn'));
 
@@ -710,17 +714,17 @@ void main() {
     // there is a problem.
     await mgr.getPurchaseHistory(true);
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
     expect(mgr.pluginErrorMsg, contains('error init cxn'));
 
     await mgr.getAvailableProducts(true);
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
     expect(mgr.pluginErrorMsg, contains('error init cxn'));
 
     mgr.requestPurchase('fake-id');
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
     expect(mgr.pluginErrorMsg, contains('error init cxn'));
   });
 
@@ -748,8 +752,8 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
-      initialShouldShowAds: true,
+      initialState:
+          TestStoreState.defaultState(true, PlatformWrapper.android()),
       answerGetPurchaseHistory: () => pluginResult.future,
       answerGetProducts: () => Future.value([]),
       answerGetSubscriptions: () => Future.value([]),
@@ -759,7 +763,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -776,7 +780,7 @@ void main() {
     expect(mgr.isLoaded, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     expect(calledFinishTransaction, isFalse);
   });
@@ -813,8 +817,8 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
-      initialShouldShowAds: true,
+      initialState:
+          TestStoreState.defaultState(true, PlatformWrapper.android()),
       answerGetPurchaseHistory: () => purchaseHistoryResult.future,
       answerGetProducts: () => Future.value([]),
       answerGetSubscriptions: () => Future.value([]),
@@ -824,7 +828,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -841,7 +845,7 @@ void main() {
     expect(mgr.isLoaded, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isOwned);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     expect(calledFinishTransaction, isFalse);
   });
@@ -878,8 +882,8 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
-      initialShouldShowAds: true,
+      initialState:
+          TestStoreState.defaultState(true, PlatformWrapper.android()),
       answerGetPurchaseHistory: () => purchaseHistoryResult.future,
       answerGetProducts: () => Future.value([]),
       answerGetSubscriptions: () => Future.value([]),
@@ -889,7 +893,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -906,7 +910,7 @@ void main() {
     expect(mgr.isLoaded, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     expect(calledFinishTransaction, isTrue);
   });
@@ -942,8 +946,7 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
-      initialShouldShowAds: true,
+      initialState: TestStoreState.defaultState(true, PlatformWrapper.ios()),
       answerGetPurchaseHistory: () => purchaseHistoryResult.future,
       answerGetProducts: () => Future.value([]),
       answerGetSubscriptions: () => Future.value([]),
@@ -953,7 +956,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -970,7 +973,7 @@ void main() {
     expect(mgr.isLoaded, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
 
     expect(calledFinish, isTrue);
   });
@@ -1007,8 +1010,7 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
-      initialShouldShowAds: true,
+      initialState: TestStoreState.defaultState(true, PlatformWrapper.ios()),
       answerGetPurchaseHistory: () => purchaseHistoryResult.future,
       answerGetProducts: () => Future.value([]),
       answerGetSubscriptions: () => Future.value([]),
@@ -1018,7 +1020,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -1035,7 +1037,7 @@ void main() {
     expect(mgr.isLoaded, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     expect(calledFinish, isFalse);
   });
@@ -1126,8 +1128,7 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'app-secret-key',
-      initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
-      initialShouldShowAds: true,
+      initialState: TestStoreState.defaultState(true, PlatformWrapper.ios()),
       answerGetPurchaseHistory: () => purchaseHistoryResult.future,
       answerGetProducts: () => Future.value([]),
       answerGetSubscriptions: () => Future.value([]),
@@ -1137,7 +1138,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -1154,7 +1155,7 @@ void main() {
     expect(mgr.isLoaded, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isOwned);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
     // We accept either, but we should only ever call once for a given batch.
     expect(numTimesValidateTxn, equals(2));
 
@@ -1234,8 +1235,7 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'app-secret-key',
-      initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
-      initialShouldShowAds: false,
+      initialState: TestStoreState.defaultState(false, PlatformWrapper.ios()),
       answerGetPurchaseHistory: () => purchaseHistoryResult.future,
       answerGetProducts: () => Future.value([]),
       answerGetSubscriptions: () => Future.value([]),
@@ -1245,7 +1245,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -1263,7 +1263,7 @@ void main() {
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
     // We should show ads--started without ads, expired sub removed it.
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     // We should only call once--for prod.
     expect(numTimesValidateTxn, equals(1));
 
@@ -1341,8 +1341,7 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'app-secret-key',
-      initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
-      initialShouldShowAds: false,
+      initialState: TestStoreState.defaultState(false, PlatformWrapper.ios()),
       answerGetPurchaseHistory: () => purchaseHistoryResult.future,
       answerGetProducts: () => Future.value([]),
       answerGetSubscriptions: () => Future.value([]),
@@ -1352,7 +1351,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -1370,7 +1369,7 @@ void main() {
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
     // We should show ads--started without ads, expired sub removed it.
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     // We should only call once--for prod.
     expect(numTimesValidateTxn, equals(1));
 
@@ -1529,8 +1528,7 @@ void main() {
       TestIAPManager mgr = _buildInitializingIAPManager(
         mockedPlugin: plugin,
         iosSecret: 'app-secret-key',
-        initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
-        initialShouldShowAds: false,
+        initialState: TestStoreState.defaultState(false, PlatformWrapper.ios()),
         answerGetPurchaseHistory: () => purchaseHistoryResult.future,
         answerGetProducts: () => Future.value([]),
         answerGetSubscriptions: () => Future.value([]),
@@ -1540,7 +1538,7 @@ void main() {
       await mgr.waitForInitialized();
 
       expect(mgr.isLoaded, isTrue);
-      expect(mgr.shouldShowAds, isTrue);
+      expect(mgr.storeState.shouldShowAds(), isTrue);
       expect(mgr.storeState.noAdsForever.owned, isNotOwned);
       expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -1560,7 +1558,7 @@ void main() {
           mgr.storeState.noAdsOneYear.owned, equals(testCase.wantOwnedState));
       // We started not showing ads--bad validation (as opposed to validating
       // an expired sub) shouldn't remove the validation.
-      expect(mgr.shouldShowAds, equals(testCase.wantShowAds));
+      expect(mgr.storeState.shouldShowAds(), equals(testCase.wantShowAds));
 
       expect(mgr.pluginErrorMsg, isNull);
 
@@ -1597,8 +1595,8 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
-      initialShouldShowAds: false,
+      initialState:
+          TestStoreState.defaultState(false, PlatformWrapper.android()),
       answerGetPurchaseHistory: () => purchaseHistoryResult.future,
       answerGetProducts: () => Future.value([]),
       answerGetSubscriptions: () => Future.value([]),
@@ -1608,7 +1606,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -1625,7 +1623,7 @@ void main() {
     expect(mgr.isLoaded, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
   });
 
   test('getPurchaseHistory() error', () async {
@@ -1638,8 +1636,8 @@ void main() {
     TestIAPManager mgr = _buildNeedsInitializeIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
-      initialShouldShowAds: false,
+      initialState:
+          TestStoreState.defaultState(false, PlatformWrapper.android()),
       answerGetPurchaseHistory: () {
         throw Exception('expected error');
       },
@@ -1651,7 +1649,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
     expect(mgr.storeState.noAdsForever.owned, isUnknown);
     expect(mgr.storeState.noAdsOneYear.owned, isUnknown);
 
@@ -1667,8 +1665,8 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
-      initialShouldShowAds: true,
+      initialState:
+          TestStoreState.defaultState(true, PlatformWrapper.android()),
       answerGetPurchaseHistory: () => Future.value([]),
       answerGetProducts: () => products.future,
       answerGetSubscriptions: () => subs.future,
@@ -1678,7 +1676,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -1697,7 +1695,7 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     TestStoreState got = mgr.storeState;
 
@@ -1728,8 +1726,8 @@ void main() {
     TestIAPManager mgr = _buildInitializingIAPManager(
       mockedPlugin: plugin,
       iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
-      initialShouldShowAds: true,
+      initialState:
+          TestStoreState.defaultState(true, PlatformWrapper.android()),
       answerGetPurchaseHistory: () => Future.value([]),
       answerGetProducts: () => products.future,
       answerGetSubscriptions: () => subs.future,
@@ -1739,7 +1737,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -1811,8 +1809,8 @@ void main() {
     IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      initialShouldShowAds,
+      TestStoreState.defaultState(
+          initialShouldShowAds, PlatformWrapper.android()),
       null,
       PlatformWrapper.android(),
     );
@@ -1821,7 +1819,7 @@ void main() {
     // Now we should have had an error.
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
-    expect(mgr.shouldShowAds, initialShouldShowAds);
+    expect(mgr.storeState.shouldShowAds(), initialShouldShowAds);
     expect(mgr.pluginErrorMsg, contains('error on first initConnection'));
 
     Future<void> recoveredFromError = mgr.tryToRecoverFromError();
@@ -1841,7 +1839,7 @@ void main() {
 
     expect(mgr.storeState.noAdsForever.getTitle(), equals('Title One Time'));
     expect(mgr.storeState.noAdsOneYear.getTitle(), equals('Title One Year'));
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -1922,8 +1920,8 @@ void main() {
     IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      initialShouldShowAds,
+      TestStoreState.defaultState(
+          initialShouldShowAds, PlatformWrapper.android()),
       null,
       PlatformWrapper.android(),
     );
@@ -1932,7 +1930,7 @@ void main() {
     // Now we should have had an error.
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
-    expect(mgr.shouldShowAds, initialShouldShowAds);
+    expect(mgr.storeState.shouldShowAds(), initialShouldShowAds);
     expect(mgr.pluginErrorMsg, contains('error on purchase history'));
 
     await mgr.tryToRecoverFromError();
@@ -1941,7 +1939,7 @@ void main() {
     expect(mgr.isStillInitializing, isFalse);
     expect(mgr.storeState.noAdsForever.getTitle(), equals('Title One Time'));
     expect(mgr.storeState.noAdsOneYear.getTitle(), equals('Title One Year'));
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
     expect(mgr.storeState.noAdsForever.owned, isOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
@@ -2015,14 +2013,13 @@ void main() {
     IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
+      TestStoreState.defaultState(true, PlatformWrapper.android()),
       null,
       PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     initResult.complete('cxn is live');
     expect(mgr.isLoaded, isFalse);
@@ -2041,7 +2038,7 @@ void main() {
 
     expect(mgr.storeState.noAdsForever.getTitle(), equals('Title One Time'));
     expect(mgr.storeState.noAdsOneYear.getTitle(), equals('Title One Year'));
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
@@ -2052,7 +2049,7 @@ void main() {
     mgr.requestPurchase(items.forLife.productId);
     await TestUtil.waitUntilTrue(() => mgr.storeState.noAdsForever.isOwned());
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
     expect(calledFinish, isTrue);
   });
 
@@ -2118,14 +2115,13 @@ void main() {
     IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.ios()),
-      true,
+      TestStoreState.defaultState(true, PlatformWrapper.ios()),
       null,
       PlatformWrapper.ios(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     initResult.complete('cxn is live');
     expect(mgr.isLoaded, isFalse);
@@ -2144,7 +2140,7 @@ void main() {
 
     expect(mgr.storeState.noAdsForever.getTitle(), equals('Title One Time'));
     expect(mgr.storeState.noAdsOneYear.getTitle(), equals('Title One Year'));
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
@@ -2155,7 +2151,7 @@ void main() {
     mgr.requestPurchase(items.forLife.productId);
     await TestUtil.waitUntilTrue(() => mgr.storeState.noAdsForever.isOwned());
     expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
     expect(calledFinish, isTrue);
   });
 
@@ -2207,14 +2203,13 @@ void main() {
     IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
+      TestStoreState.defaultState(true, PlatformWrapper.android()),
       null,
       PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     initResult.complete('cxn is live');
     expect(mgr.isLoaded, isFalse);
@@ -2232,7 +2227,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.storeState.noAdsForever.getTitle(), equals('Title One Time'));
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
@@ -2251,7 +2246,7 @@ void main() {
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.hasError(), isFalse);
     expect(mgr.storeState.lastError, isNull);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
   });
 
   test('requestPurchase() throws error', () async {
@@ -2298,14 +2293,13 @@ void main() {
     IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
+      TestStoreState.defaultState(true, PlatformWrapper.android()),
       null,
       PlatformWrapper.android(),
     );
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     initResult.complete('cxn is live');
     expect(mgr.isLoaded, isFalse);
@@ -2323,7 +2317,7 @@ void main() {
     await mgr.waitForInitialized();
 
     expect(mgr.storeState.noAdsForever.getTitle(), equals('Title One Time'));
-    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
@@ -2415,8 +2409,7 @@ void main() {
     IAPManager<TestStoreState> mgr = IAPManager<TestStoreState>(
       plugin,
       'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
+      TestStoreState.defaultState(true, PlatformWrapper.android()),
       notifyListenersCallback,
       PlatformWrapper.android(),
     );
@@ -2438,6 +2431,6 @@ void main() {
     expect(mgr.isLoaded, isTrue);
     expect(mgr.storeState.noAdsForever.owned, isNotOwned);
     expect(mgr.storeState.noAdsOneYear.owned, isOwned);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
   });
 }

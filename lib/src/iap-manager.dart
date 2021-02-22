@@ -50,8 +50,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   T _storeState;
   bool _isLoaded = false;
   bool _subscribedToStreams = false;
-  // This is a live value that we expose as we receive updates.
-  bool _preLoadedShouldShowAds = true;
   bool _isStillInitializing = false;
   // Used to facilitate waiting on initialize() to complete, which is kind of
   // tricky since we call it async in a sync constructor.
@@ -71,19 +69,15 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   bool get isLoaded => _isLoaded;
   bool get isStillInitializing => _isStillInitializing;
   bool get hasPluginError => _pluginErrorMsg != null;
-  bool get shouldShowAds => _calculateShouldShowAds();
   String get pluginErrorMsg => _pluginErrorMsg;
 
   IAPManager(
     this._plugin,
     this._iosSharedSecret,
     this._storeState,
-    initialShouldShowAds,
     void Function() notifyListenersInvokedCallback,
     PlatformWrapper platformWrapper,
   ) {
-    _preLoadedShouldShowAds = initialShouldShowAds;
-
     _notifyListenersInvokedCallback = notifyListenersInvokedCallback;
     _platformWrapper = platformWrapper ?? PlatformWrapper();
 
@@ -103,10 +97,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
 
   Future<void> waitForInitialized() {
     return _doneInitializingCompleter.future;
-  }
-
-  bool _calculateShouldShowAds() {
-    return _storeState.shouldShowAds(_preLoadedShouldShowAds);
   }
 
   /// This should be called in initState().

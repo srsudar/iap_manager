@@ -147,11 +147,6 @@ abstract class StateFromStore {
   /// Construct a new state without lastError.
   StateFromStore dismissError();
 
-  /// Return true if we should show ads. Will return previous state if the ad
-  /// state can't be determined by this state alone (eg if purchases have
-  /// not yet been fetched.
-  bool shouldShowAds(bool previousState);
-
   StateFromStore takeAvailableProduct(IAPItem item);
 
   StateFromStore takePurchase(PurchasedItem item, {String errMsg = ''});
