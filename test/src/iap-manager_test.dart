@@ -108,6 +108,24 @@ class PurchaseSKUsIOS implements PurchaseSKUs {
   String getRemoveAdsOneYear() => 'remove_ads_oneyear';
 }
 
+class TestIAPManager extends IAPManager<TestStoreState> {
+  TestIAPManager(
+    IAPPlugin3PWrapper plugin,
+    String iosSharedSecret,
+    TestStoreState storeState,
+    initialShouldShowAds,
+    void Function() notifyListenersInvokedCallback,
+    PlatformWrapper platformWrapper,
+  ) : super(
+          plugin,
+          iosSharedSecret,
+          storeState,
+          initialShouldShowAds,
+          notifyListenersInvokedCallback,
+          platformWrapper,
+        );
+}
+
 class TestStoreState extends StateFromStore {
   final InAppProduct noAdsForever;
   final InAppProduct noAdsOneYear;
@@ -261,6 +279,125 @@ class TestStoreState extends StateFromStore {
       'remove_ads_oneyear',
     ];
   }
+}
+
+/// This builds a TestIAPManager where the immediate calls to initialize are
+/// provided by the caller. If answerGetSubscriptions() throws an error, eg,
+/// the manager returned by this method will never initialize.
+TestIAPManager _buildNeedsInitializeIAPManager({
+  IAPPlugin3PWrapper mockedPlugin,
+  String iosSecret,
+  bool initialShouldShowAds,
+  TestStoreState initialState,
+  // We only call these three methods b/c these three methods are what we
+  // need in initialize for a bare load.
+  Future<List<IAPItem>> Function() answerGetProducts,
+  Future<List<IAPItem>> Function() answerGetSubscriptions,
+  Future<List<PurchasedItem>> Function() answerGetPurchaseHistory,
+  PlatformWrapper platformWrapper,
+}) {
+  when(mockedPlugin.initConnection()).thenAnswer((_) async {
+    return 'connected';
+  });
+
+  // Handle the purchase and error streams.
+  StreamController<PurchasedItem> purchaseUpdatedStream =
+      StreamController<PurchasedItem>();
+  StreamController<PurchaseResult> purchaseErrorStream =
+      StreamController<PurchaseResult>();
+
+  when(mockedPlugin.getPurchaseUpdatedStream())
+      .thenAnswer((_) => purchaseUpdatedStream.stream);
+  when(mockedPlugin.getPurchaseErrorStream())
+      .thenAnswer((_) => purchaseErrorStream.stream);
+
+  when(mockedPlugin.getPurchaseHistory()).thenAnswer((_) async {
+    return answerGetPurchaseHistory();
+  });
+
+  when(mockedPlugin.getProducts(any)).thenAnswer((_) async {
+    return answerGetProducts();
+  });
+
+  when(mockedPlugin.getSubscriptions(any)).thenAnswer((_) async {
+    return answerGetSubscriptions();
+  });
+
+  return TestIAPManager(
+    mockedPlugin,
+    iosSecret,
+    initialState,
+    initialShouldShowAds,
+    null,
+    platformWrapper,
+  );
+}
+
+/// This builds a TestIAPManager that initializes immediately, without
+/// recovering any state. It allows initialization to complete and then
+/// callers can test other state.
+TestIAPManager _buildInitializingIAPManager({
+  IAPPlugin3PWrapper mockedPlugin,
+  String iosSecret,
+  bool initialShouldShowAds,
+  TestStoreState initialState,
+  // We only call these three methods b/c these three methods are what we
+  // need in initialize for a bare load.
+  Future<List<IAPItem>> Function() answerGetProducts,
+  Future<List<IAPItem>> Function() answerGetSubscriptions,
+  Future<List<PurchasedItem>> Function() answerGetPurchaseHistory,
+  PlatformWrapper platformWrapper,
+}) {
+  when(mockedPlugin.initConnection()).thenAnswer((_) async {
+    return 'connected';
+  });
+
+  // Handle the purchase and error streams.
+  StreamController<PurchasedItem> purchaseUpdatedStream =
+      StreamController<PurchasedItem>();
+  StreamController<PurchaseResult> purchaseErrorStream =
+      StreamController<PurchaseResult>();
+
+  when(mockedPlugin.getPurchaseUpdatedStream())
+      .thenAnswer((_) => purchaseUpdatedStream.stream);
+  when(mockedPlugin.getPurchaseErrorStream())
+      .thenAnswer((_) => purchaseErrorStream.stream);
+
+  int numTimesGetPurchaseHistoryInvoked = 0;
+  when(mockedPlugin.getPurchaseHistory()).thenAnswer((_) async {
+    numTimesGetPurchaseHistoryInvoked++;
+    if (numTimesGetPurchaseHistoryInvoked == 1) {
+      return [];
+    }
+    return answerGetPurchaseHistory();
+  });
+
+  int numTimesGetProductsInvoked = 0;
+  when(mockedPlugin.getProducts(any)).thenAnswer((_) async {
+    numTimesGetProductsInvoked++;
+    if (numTimesGetProductsInvoked == 1) {
+      return [];
+    }
+    return answerGetProducts();
+  });
+
+  int numTimesGetSubscriptionsInvoked = 0;
+  when(mockedPlugin.getSubscriptions(any)).thenAnswer((_) async {
+    numTimesGetSubscriptionsInvoked++;
+    if (numTimesGetSubscriptionsInvoked == 1) {
+      return [];
+    }
+    return answerGetSubscriptions();
+  });
+
+  return TestIAPManager(
+    mockedPlugin,
+    iosSecret,
+    initialState,
+    initialShouldShowAds,
+    null,
+    platformWrapper,
+  );
 }
 
 // The worst case scenario for ads is if we've saved not showing ads, and
@@ -591,12 +728,6 @@ void main() {
     expect(mgr.pluginErrorMsg, contains('error init cxn'));
   });
 
-  // test('reinits if connection goes dead', () async {
-  //   // Maybe should be careful here in handling interleaving calls even? Eg
-  //   // call products, still running, and then the next call cancels.
-  //   expect(true, isFalse);
-  // });
-
   test('getPurchaseHistory() android: null transactionId', () async {
     PurchasedItem shouldIgnoreNullId = MockPurchasedItem();
     when(shouldIgnoreNullId.transactionId).thenReturn(null);
@@ -607,7 +738,6 @@ void main() {
     IAPPlugin3PWrapper plugin = MockPluginWrapper();
 
     bool calledFinishTransaction = false;
-
     when(plugin.finishTransaction(any)).thenAnswer((realInvocation) async {
       calledFinishTransaction = true;
       return 'acked';
@@ -618,21 +748,24 @@ void main() {
     ];
 
     var pluginResult = Completer<List<PurchasedItem>>();
-    when(plugin.getPurchaseHistory()).thenAnswer((_) => pluginResult.future);
 
-    // Start showing ads, then make sure we stop showing ads once we have
-    // purchases.
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
-      PlatformWrapper.android(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
+      initialShouldShowAds: true,
+      answerGetPurchaseHistory: () => pluginResult.future,
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.android(),
     );
+
+    await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getPurchaseHistory(true);
 
@@ -678,29 +811,34 @@ void main() {
       acked,
     ];
 
-    var pluginResult = Completer<List<PurchasedItem>>();
-    when(plugin.getPurchaseHistory()).thenAnswer((_) => pluginResult.future);
+    var purchaseHistoryResult = Completer<List<PurchasedItem>>();
 
     // Start showing ads, then make sure we stop showing ads once we have
     // purchases.
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
-      PlatformWrapper.android(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
+      initialShouldShowAds: true,
+      answerGetPurchaseHistory: () => purchaseHistoryResult.future,
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.android(),
     );
+
+    await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getPurchaseHistory(true);
 
     expect(mgr.isLoaded, isFalse);
 
     // And now return the getPurchaseHistory with our items.
-    pluginResult.complete(purchases);
+    purchaseHistoryResult.complete(purchases);
 
     // Let everything complete.
     await result;
@@ -739,29 +877,34 @@ void main() {
       needsAck,
     ];
 
-    var pluginResult = Completer<List<PurchasedItem>>();
-    when(plugin.getPurchaseHistory()).thenAnswer((_) => pluginResult.future);
+    var purchaseHistoryResult = Completer<List<PurchasedItem>>();
 
     // Start showing ads, then make sure we stop showing ads once we have
     // purchases.
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
-      PlatformWrapper.android(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
+      initialShouldShowAds: true,
+      answerGetPurchaseHistory: () => purchaseHistoryResult.future,
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.android(),
     );
+
+    await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getPurchaseHistory(true);
 
     expect(mgr.isLoaded, isFalse);
 
     // And now return the getPurchaseHistory with our items.
-    pluginResult.complete(purchases);
+    purchaseHistoryResult.complete(purchases);
 
     // Let everything complete.
     await result;
@@ -799,29 +942,34 @@ void main() {
       purchased,
     ];
 
-    var pluginResult = Completer<List<PurchasedItem>>();
-    when(plugin.getPurchaseHistory()).thenAnswer((_) => pluginResult.future);
+    var purchaseHistoryResult = Completer<List<PurchasedItem>>();
 
     // Start showing ads, then make sure we stop showing ads once we have
     // purchases.
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'foo',
-      TestStoreState.defaultState(PlatformWrapper.ios()),
-      true,
-      PlatformWrapper.ios(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
+      initialShouldShowAds: true,
+      answerGetPurchaseHistory: () => purchaseHistoryResult.future,
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.ios(),
     );
+
+    await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getPurchaseHistory(true);
 
     expect(mgr.isLoaded, isFalse);
 
     // And now return the getPurchaseHistory with our items.
-    pluginResult.complete(purchases);
+    purchaseHistoryResult.complete(purchases);
 
     // Let everything complete.
     await result;
@@ -860,29 +1008,34 @@ void main() {
       purchasing,
     ];
 
-    var pluginResult = Completer<List<PurchasedItem>>();
-    when(plugin.getPurchaseHistory()).thenAnswer((_) => pluginResult.future);
+    var purchaseHistoryResult = Completer<List<PurchasedItem>>();
 
     // Start showing ads, then make sure we stop showing ads once we have
     // purchases.
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'foo',
-      TestStoreState.defaultState(PlatformWrapper.ios()),
-      true,
-      PlatformWrapper.ios(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
+      initialShouldShowAds: true,
+      answerGetPurchaseHistory: () => purchaseHistoryResult.future,
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.ios(),
     );
+
+    await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getPurchaseHistory(true);
 
     expect(mgr.isLoaded, isFalse);
 
     // And now return the getPurchaseHistory with our items.
-    pluginResult.complete(purchases);
+    purchaseHistoryResult.complete(purchases);
 
     // Let everything complete.
     await result;
@@ -975,29 +1128,34 @@ void main() {
       sub2,
     ];
 
-    var pluginResult = Completer<List<PurchasedItem>>();
-    when(plugin.getPurchaseHistory()).thenAnswer((_) => pluginResult.future);
+    var purchaseHistoryResult = Completer<List<PurchasedItem>>();
 
     // Start showing ads, then make sure we stop showing ads once we have
     // purchases.
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'app-secret-key',
-      TestStoreState.defaultState(PlatformWrapper.ios()),
-      true,
-      PlatformWrapper.ios(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'app-secret-key',
+      initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
+      initialShouldShowAds: true,
+      answerGetPurchaseHistory: () => purchaseHistoryResult.future,
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.ios(),
     );
+
+    await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getPurchaseHistory(true);
 
     expect(mgr.isLoaded, isFalse);
 
     // And now return the getPurchaseHistory with our items.
-    pluginResult.complete(purchases);
+    purchaseHistoryResult.complete(purchases);
 
     // Let everything complete.
     await result;
@@ -1080,28 +1238,33 @@ void main() {
       sub,
     ];
 
-    var pluginResult = Completer<List<PurchasedItem>>();
-    when(plugin.getPurchaseHistory()).thenAnswer((_) => pluginResult.future);
+    var purchaseHistoryResult = Completer<List<PurchasedItem>>();
 
     // Start NOT showing ads, and make sure we remove for an expired sub.
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'app-secret-key',
-      TestStoreState.defaultState(PlatformWrapper.ios()),
-      false,
-      PlatformWrapper.ios(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'app-secret-key',
+      initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
+      initialShouldShowAds: false,
+      answerGetPurchaseHistory: () => purchaseHistoryResult.future,
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.ios(),
     );
 
+    await mgr.waitForInitialized();
+
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getPurchaseHistory(true);
 
     expect(mgr.isLoaded, isFalse);
 
     // And now return the getPurchaseHistory with our items.
-    pluginResult.complete(purchases);
+    purchaseHistoryResult.complete(purchases);
 
     // Let everything complete.
     await result;
@@ -1183,28 +1346,33 @@ void main() {
     // On iOS subs come via purchases.
     List<PurchasedItem> purchases = subs;
 
-    var pluginResult = Completer<List<PurchasedItem>>();
-    when(plugin.getPurchaseHistory()).thenAnswer((_) => pluginResult.future);
+    var purchaseHistoryResult = Completer<List<PurchasedItem>>();
 
     // Start NOT showing ads, and make sure we remove for an expired sub.
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'app-secret-key',
-      TestStoreState.defaultState(PlatformWrapper.ios()),
-      false,
-      PlatformWrapper.ios(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'app-secret-key',
+      initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
+      initialShouldShowAds: false,
+      answerGetPurchaseHistory: () => purchaseHistoryResult.future,
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.ios(),
     );
 
+    await mgr.waitForInitialized();
+
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getPurchaseHistory(true);
 
     expect(mgr.isLoaded, isFalse);
 
     // And now return the getPurchaseHistory with our items.
-    pluginResult.complete(purchases);
+    purchaseHistoryResult.complete(purchases);
 
     // Let everything complete.
     await result;
@@ -1368,32 +1536,32 @@ void main() {
         sub,
       ];
 
-      var pluginResult = Completer<List<PurchasedItem>>();
-      when(plugin.getPurchaseHistory()).thenAnswer((_) => pluginResult.future);
+      var purchaseHistoryResult = Completer<List<PurchasedItem>>();
 
-      // Start NOT showing ads, and make sure we remove for an expired sub.
-      IAPManager<TestStoreState> mgr =
-          IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-        plugin,
-        'app-secret-key',
-        TestStoreState.defaultState(PlatformWrapper.ios()),
-        false,
-        PlatformWrapper.ios(),
+      TestIAPManager mgr = _buildInitializingIAPManager(
+        mockedPlugin: plugin,
+        iosSecret: 'app-secret-key',
+        initialState: TestStoreState.defaultState(PlatformWrapper.ios()),
+        initialShouldShowAds: false,
+        answerGetPurchaseHistory: () => purchaseHistoryResult.future,
+        answerGetProducts: () => Future.value([]),
+        answerGetSubscriptions: () => Future.value([]),
+        platformWrapper: PlatformWrapper.ios(),
       );
 
-      expect(mgr.isLoaded, isTrue);
-      expect(mgr.shouldShowAds, isFalse);
+      await mgr.waitForInitialized();
 
-      if (testCase.respCode == 404) {
-        PlatformWrapper.ios();
-      }
+      expect(mgr.isLoaded, isTrue);
+      expect(mgr.shouldShowAds, isTrue);
+      expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+      expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
       Future<void> result = mgr.getPurchaseHistory(true);
 
       expect(mgr.isLoaded, isFalse);
 
       // And now return the getPurchaseHistory with our items.
-      pluginResult.complete(purchases);
+      purchaseHistoryResult.complete(purchases);
 
       // Let everything complete.
       await result;
@@ -1436,28 +1604,33 @@ void main() {
 
     List<PurchasedItem> purchases = [];
 
-    var pluginResult = Completer<List<PurchasedItem>>();
-    when(plugin.getPurchaseHistory()).thenAnswer((_) => pluginResult.future);
+    var purchaseHistoryResult = Completer<List<PurchasedItem>>();
 
     // Start without ads. We should revert b/c no purchases.
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      false,
-      PlatformWrapper.android(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
+      initialShouldShowAds: false,
+      answerGetPurchaseHistory: () => purchaseHistoryResult.future,
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.android(),
     );
 
+    await mgr.waitForInitialized();
+
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.shouldShowAds, isFalse);
+    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getPurchaseHistory(true);
 
     expect(mgr.isLoaded, isFalse);
 
     // And now return the getPurchaseHistory with our items.
-    pluginResult.complete(purchases);
+    purchaseHistoryResult.complete(purchases);
 
     // Let everything complete.
     await result;
@@ -1469,32 +1642,35 @@ void main() {
     expect(mgr.shouldShowAds, isTrue);
   });
 
-  test('getPurchaseHistory() purchaseHistoryError error', () async {
+  test('getPurchaseHistory() error', () async {
+    // This is if we fetch it oncne the first time, and then we have an error
+    // on the second time.
     IAPPlugin3PWrapper plugin = MockPluginWrapper();
-
-    when(plugin.getPurchaseHistory()).thenAnswer((realInvocation) async {
-      throw Exception('expected error');
-    });
 
     // Start now showing ads, and make sure we still don't show ads if we had
     // an error.
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      false,
-      PlatformWrapper.android(),
+    TestIAPManager mgr = _buildNeedsInitializeIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
+      initialShouldShowAds: false,
+      answerGetPurchaseHistory: () {
+        throw Exception('expected error');
+      },
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.android(),
     );
 
-    await mgr.getPurchaseHistory(true);
+    await mgr.waitForInitialized();
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedPurchases, isFalse);
-    expect(mgr.pluginErrorMsg, contains('expected error'));
+    expect(mgr.shouldShowAds, isFalse);
     expect(mgr.storeState.noAdsForever.owned, isUnknown);
     expect(mgr.storeState.noAdsOneYear.owned, isUnknown);
-    expect(mgr.shouldShowAds, isFalse);
+
+    expect(mgr.hasFetchedPurchases, isFalse);
+    expect(mgr.pluginErrorMsg, contains('expected error'));
   });
 
   test('getAvailableProducts() happy path', () async {
@@ -1503,20 +1679,23 @@ void main() {
 
     IAPPlugin3PWrapper plugin = MockPluginWrapper();
 
-    when(plugin.getProducts(any)).thenAnswer((_) => products.future);
-    when(plugin.getSubscriptions(any))
-        .thenAnswer((realInvocation) => subs.future);
-
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
-      PlatformWrapper.android(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
+      initialShouldShowAds: true,
+      answerGetPurchaseHistory: () => Future.value([]),
+      answerGetProducts: () => products.future,
+      answerGetSubscriptions: () => subs.future,
+      platformWrapper: PlatformWrapper.android(),
     );
 
+    await mgr.waitForInitialized();
+
     expect(mgr.isLoaded, isTrue);
+    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getAvailableProducts(true);
 
@@ -1534,6 +1713,7 @@ void main() {
 
     expect(mgr.isLoaded, isTrue);
     expect(mgr.hasFetchedAvailableProducts, isTrue);
+    expect(mgr.shouldShowAds, isTrue);
 
     TestStoreState got = mgr.storeState;
 
@@ -1542,14 +1722,14 @@ void main() {
         got.noAdsForever.product.description,
         equals('Description One '
             'Time'));
-    expect(got.noAdsForever.owned, isUnknown);
+    expect(got.noAdsForever.owned, isNotOwned);
 
     expect(got.noAdsOneYear.getTitle(), equals('Title One Year'));
     expect(
         got.noAdsOneYear.product.description,
         equals('Description One '
             'Year'));
-    expect(got.noAdsOneYear.owned, isUnknown);
+    expect(got.noAdsOneYear.owned, isNotOwned);
   });
 
   test('getAvailableProducts() getProducts error', () async {
@@ -1561,16 +1741,23 @@ void main() {
     when(plugin.getProducts(any)).thenAnswer((_) => products.future);
     when(plugin.getSubscriptions(any)).thenAnswer((_) => subs.future);
 
-    IAPManager<TestStoreState> mgr =
-        IAPManager<TestStoreState>.forTestingDoNotCallInitialize(
-      plugin,
-      'foo',
-      TestStoreState.defaultState(PlatformWrapper.android()),
-      true,
-      PlatformWrapper.android(),
+    TestIAPManager mgr = _buildInitializingIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState: TestStoreState.defaultState(PlatformWrapper.android()),
+      initialShouldShowAds: true,
+      answerGetPurchaseHistory: () => Future.value([]),
+      answerGetProducts: () => products.future,
+      answerGetSubscriptions: () => subs.future,
+      platformWrapper: PlatformWrapper.android(),
     );
 
+    await mgr.waitForInitialized();
+
     expect(mgr.isLoaded, isTrue);
+    expect(mgr.shouldShowAds, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
 
     Future<void> result = mgr.getAvailableProducts(true);
 
@@ -1586,10 +1773,10 @@ void main() {
     await result;
 
     expect(mgr.isLoaded, isTrue);
-    expect(mgr.hasFetchedAvailableProducts, isFalse);
+    expect(mgr.hasFetchedAvailableProducts, isTrue);
     expect(mgr.pluginErrorMsg, contains('error in subs'));
-    expect(mgr.storeState.noAdsForever.owned, isUnknown);
-    expect(mgr.storeState.noAdsOneYear.owned, isUnknown);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
   });
 
   test('tryToRecoverFromError() for initialization', () async {

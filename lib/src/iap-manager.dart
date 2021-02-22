@@ -94,20 +94,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     initialize();
   }
 
-  @visibleForTesting
-  IAPManager.forTestingDoNotCallInitialize(
-    this._plugin,
-    this._iosSharedSecret,
-    this._storeState,
-    initialShouldShowAds,
-    PlatformWrapper _platformWrapper,
-  ) {
-    _preLoadedShouldShowAds = initialShouldShowAds;
-    _isLoaded = true;
-    _cxnIsInitialized = true;
-    this._platformWrapper = _platformWrapper;
-  }
-
   /// This calls notifyListeners and also informs callers when
   /// notifyListeners has been invoked. This facilitates testing, eg. In
   /// general, we should avoid calls to notifyListners() in this class and
