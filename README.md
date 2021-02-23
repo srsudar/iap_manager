@@ -2,6 +2,8 @@
 
 > Manage your Flutter In-App Purchases.
 
+[![Build Status](https://travis-ci.org/srsudar/iap_manager.svg?branch=master)](https://travis-ci.org/srsudar/iap_manager)
+
 ## Warning: not yet tested in production
 
 I have not yet tested this library in my own production app. I plan to, but I
