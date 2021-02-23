@@ -51,6 +51,13 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   bool _isLoaded = false;
   bool _subscribedToStreams = false;
   bool _isStillInitializing = false;
+
+  /// True if a getPurchaseHistory request is in flight.
+  bool _isFetchingPurchaseHistory = false;
+
+  /// True if a getProductHistory request is in flight.
+  bool _isFetchingProducts = false;
+
   // Used to facilitate waiting on initialize() to complete, which is kind of
   // tricky since we call it async in a sync constructor.
   Completer<void> _doneInitializingCompleter;
@@ -89,6 +96,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   /// general, we should avoid calls to notifyListners() in this class and
   /// wrap everything in this call instead.
   void _notifyListenersWithReporter() {
+    debugPrint('going to notify listeners, loaded: $_isLoaded');
     notifyListeners();
     if (_notifyListenersInvokedCallback != null) {
       _notifyListenersInvokedCallback();
@@ -117,6 +125,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
 
     _isStillInitializing = true;
     _doneInitializingCompleter = Completer<void>();
+    debugPrint('IAPManager.initialize: setting _isLoaded = false');
     _isLoaded = false;
 
     if (!_cxnIsInitialized) {
@@ -175,13 +184,16 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     }
 
     await getPurchaseHistory(false);
+    debugPrint('IAPManager.initialize(): back from getPurchaseHistory');
     await blockForTestingAfterInitializeGetPurchaseHistory();
     // We don't actually need this here, but it's kind of a hassle to do it
     // intelligently otherwise.
     await getAvailableProducts(false);
+    debugPrint('IAPManager.initialize(): back from getAvailableProducts');
     await blockForTestingAfterGetAvailableProducts();
 
     _isLoaded = true;
+    debugPrint('IAPManager: done initializing: $_isLoaded');
     _isStillInitializing = false;
     _doneInitializingCompleter.complete();
     _notifyListenersWithReporter();
@@ -459,6 +471,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   }
 
   Future<void> _resetState() async {
+    debugPrint('IAPManager._resetState');
     _purchaseUpdatedSubscription?.cancel();
     _purchaseUpdatedSubscription = null;
     _purchaseErrorSubscription?.cancel();
@@ -467,6 +480,8 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     _subscribedToStreams = false;
     _isStillInitializing = false;
     _isLoaded = false;
+    _isFetchingPurchaseHistory = false;
+    _isFetchingProducts = false;
 
     _pluginErrorMsg = null;
 
@@ -481,14 +496,25 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   }
 
   Future<void> getPurchaseHistory(bool takeOwnershipOfLoading) async {
+    debugPrint('IAPManager.getPurchaseHistory'
+        '(takeOwnershipOfLoading: $takeOwnershipOfLoading)');
     if (!_cxnIsInitialized) {
       debugPrint(
           'IAPManager: getPurchaseHistory called but cxn not initialized');
       return;
     }
+
+    if (_isFetchingPurchaseHistory) {
+      debugPrint('IAPManager: getPurchaseHistory called but already in '
+          'flight, ignoring');
+      return;
+    }
+    _isFetchingPurchaseHistory = true;
+
     if (takeOwnershipOfLoading) {
       _isLoaded = false;
     }
+
     // Don't reset _hasFetchedPurchases. As long as we've fetched them once,
     // that is enough.
     _notifyListenersWithReporter();
@@ -519,23 +545,38 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
       debugPrint('getPurchaseHistory: ugly universal catch block: $e');
       _pluginErrorMsg = e.toString();
     }
-    debugPrint('IAPManager: getPurchaseHistory setting _isLoaded = true');
+
     if (takeOwnershipOfLoading) {
+      debugPrint('IAPManager: getPurchaseHistory setting _isLoaded = true');
       _isLoaded = true;
     }
+
+    _isFetchingPurchaseHistory = false;
+
     debugPrint('IAPManager: loaded purchases: $_storeState');
     _notifyListenersWithReporter();
   }
 
   Future<void> getAvailableProducts(bool takeOwnershipOfLoading) async {
+    debugPrint('IAPManager.getAvailableProducts'
+        '(takeOwnershipOfLoading: $takeOwnershipOfLoading)');
     if (!_cxnIsInitialized) {
       debugPrint('IAPManager.getAvailableProducts called but cxn not '
           'initialized');
       return;
     }
+
+    if (_isFetchingProducts) {
+      debugPrint('IAPManager: getAvailableProducts called but already in '
+          'flight, ignoring');
+      return;
+    }
+    _isFetchingProducts = true;
+
     if (takeOwnershipOfLoading) {
       _isLoaded = false;
     }
+
     try {
       // Note that on iOS we run the risk of getting duplicate products
       // here, depending on the iOS version. That's ok, though, b/c afaict
@@ -562,8 +603,12 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     }
 
     if (takeOwnershipOfLoading) {
+      debugPrint('IAPManager: loaded products: $_storeState');
       _isLoaded = true;
     }
+
+    _isFetchingProducts = false;
+
     _notifyListenersWithReporter();
   }
 

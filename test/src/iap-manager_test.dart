@@ -2433,4 +2433,189 @@ void main() {
     expect(mgr.storeState.noAdsOneYear.owned, isOwned);
     expect(mgr.storeState.shouldShowAds(), isFalse);
   });
+
+  test('no duplicate calls to getPurchaseHistory', () async {
+    // We need this test because the plugin behaves in a weird way when
+    // receiving multiple calls, at least on iOS. We ran into a situation
+    // where, if call A is in flight and call B is made, the plugin returns
+    // the results on call B. Call A is then left hanging and never returns.
+    // This is bad news. It also suggests that perhaps we should have a
+    // timeout property at some point...
+    PurchasedItem oneYear = MockPurchasedItem();
+    when(oneYear.transactionId).thenReturn('txn-id-1');
+    when(oneYear.purchaseStateAndroid).thenReturn(PurchaseState.purchased);
+    when(oneYear.isAcknowledgedAndroid).thenReturn(true);
+    when(oneYear.productId).thenReturn('remove_ads_oneyear');
+
+    PurchasedItem forever = MockPurchasedItem();
+    when(forever.transactionId).thenReturn('txn-id-1');
+    when(forever.purchaseStateAndroid).thenReturn(PurchaseState.purchased);
+    when(forever.isAcknowledgedAndroid).thenReturn(true);
+    when(forever.productId).thenReturn('remove_ads_onetime');
+
+    IAPPlugin3PWrapper plugin = MockPluginWrapper();
+
+    var purchaseHistoryResultDuringInit = Completer<List<PurchasedItem>>();
+    // We need to make sure we release the lock.
+    var purchaseHistoryResultAfterInit = Completer<List<PurchasedItem>>();
+
+    int numTimesCalledGetPurchaseHistory = 0;
+    bool doneInitializing = false;
+    var answerGetPurchaseHistory = () async {
+      numTimesCalledGetPurchaseHistory++;
+      if (numTimesCalledGetPurchaseHistory == 1) {
+        return purchaseHistoryResultDuringInit.future;
+      }
+      if (doneInitializing) {
+        return purchaseHistoryResultAfterInit.future;
+      }
+      throw Exception('called getPurchaseHistory > 1 time');
+    };
+
+    // Start showing ads, then make sure we stop showing ads once we have
+    // purchases.
+    TestIAPManager mgr = _buildNeedsInitializeIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState:
+          TestStoreState.defaultState(true, PlatformWrapper.android()),
+      answerGetPurchaseHistory: answerGetPurchaseHistory,
+      answerGetProducts: () => Future.value([]),
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.android(),
+    );
+
+    // Now, initialize has called getPurchaseHistory. We are blocked on that
+    // completing.
+    await TestUtil.waitUntilTrue(() => numTimesCalledGetPurchaseHistory == 1);
+
+    expect(mgr.isLoaded, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isUnknown);
+    expect(mgr.storeState.noAdsOneYear.owned, isUnknown);
+    expect(mgr.pluginErrorMsg, isNull);
+
+    // This should return immediately. It's a no-op b/c we are already
+    // waiting for a getPurchaseHistory request.
+    await mgr.getPurchaseHistory(true);
+    expect(mgr.pluginErrorMsg, isNull);
+
+    // And now return the getPurchaseHistory with our items.
+    purchaseHistoryResultDuringInit.complete([oneYear]);
+
+    // Let everything complete.
+    await mgr.waitForInitialized();
+
+    expect(mgr.isLoaded, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isOwned);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
+    expect(mgr.pluginErrorMsg, isNull);
+
+    doneInitializing = true;
+
+    // And now we make sure we have released the lock on getPurchaseHistory.
+    var result = mgr.getPurchaseHistory(true);
+    expect(mgr.isLoaded, isFalse);
+    expect(mgr.pluginErrorMsg, isNull);
+
+    purchaseHistoryResultAfterInit.complete([forever]);
+
+    await result;
+
+    expect(mgr.isLoaded, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isOwned);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
+    expect(mgr.pluginErrorMsg, isNull);
+  });
+
+  test('during initialize no calls to products', () async {
+    var items = _MockedIAPItems();
+
+    IAPPlugin3PWrapper plugin = MockPluginWrapper();
+
+    var getProductsResultDuringInit = Completer<List<IAPItem>>();
+    // We need to make sure we release the lock.
+    var getProductsResultAfterInit = Completer<List<IAPItem>>();
+
+    int numTimesCalledGetProducts = 0;
+    bool doneInitializing = false;
+    var answerGetProducts = () async {
+      numTimesCalledGetProducts++;
+      if (numTimesCalledGetProducts == 1) {
+        return getProductsResultDuringInit.future;
+      }
+      if (doneInitializing) {
+        return getProductsResultAfterInit.future;
+      }
+      throw Exception('called getPurchaseHistory > 1 time');
+    };
+
+    // Start showing ads, then make sure we stop showing ads once we have
+    // purchases.
+    TestIAPManager mgr = _buildNeedsInitializeIAPManager(
+      mockedPlugin: plugin,
+      iosSecret: 'foo',
+      initialState:
+          TestStoreState.defaultState(false, PlatformWrapper.android()),
+      answerGetPurchaseHistory: () => Future.value([]),
+      answerGetProducts: answerGetProducts,
+      answerGetSubscriptions: () => Future.value([]),
+      platformWrapper: PlatformWrapper.android(),
+    );
+
+    // Now, initialize has called getPurchaseHistory. We are blocked on that
+    // completing.
+    await TestUtil.waitUntilTrue(() => numTimesCalledGetProducts == 1);
+
+    expect(mgr.isLoaded, isFalse);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsForever.product, isNull);
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.product, isNull);
+    expect(mgr.pluginErrorMsg, isNull);
+
+    // This should return immediately. It's a no-op b/c we are already
+    // waiting for a getPurchaseHistory request.
+    await mgr.getAvailableProducts(true);
+    expect(mgr.pluginErrorMsg, isNull);
+
+    // And now return the getPurchaseHistory with our items.
+    getProductsResultDuringInit.complete([items.forLife]);
+
+    // Let everything complete.
+    await mgr.waitForInitialized();
+
+    expect(mgr.isLoaded, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsForever.product, isNotNull);
+    expect(mgr.storeState.noAdsForever.product.title, equals('Title One Time'));
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.product, isNull);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
+    expect(mgr.pluginErrorMsg, isNull);
+
+    doneInitializing = true;
+
+    // And now we make sure we have released the lock on getPurchaseHistory.
+    var result = mgr.getAvailableProducts(true);
+    expect(mgr.isLoaded, isFalse);
+    expect(mgr.pluginErrorMsg, isNull);
+
+    getProductsResultAfterInit.complete([items.forOneYear]);
+
+    await result;
+
+    expect(mgr.isLoaded, isTrue);
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.noAdsForever.product, isNotNull);
+    expect(mgr.storeState.noAdsForever.product.title, equals('Title One Time'));
+    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
+    expect(mgr.storeState.noAdsOneYear.product, isNotNull);
+    expect(mgr.storeState.noAdsOneYear.product.title, equals('Title One Year'));
+    expect(mgr.storeState.shouldShowAds(), isTrue);
+    expect(mgr.pluginErrorMsg, isNull);
+  });
 }
