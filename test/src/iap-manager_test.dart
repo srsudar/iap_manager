@@ -125,13 +125,12 @@ class TestIAPManager extends IAPManager<TestStoreState> {
 }
 
 class TestStoreState extends StateFromStore {
+  final bool initialShouldShowAds;
   final InAppProduct noAdsForever;
   final InAppProduct noAdsOneYear;
-  final PurchaseResult lastError;
-  final bool initialShouldShowAds;
 
   TestStoreState(this.initialShouldShowAds, this.noAdsForever,
-      this.noAdsOneYear, this.lastError)
+      this.noAdsOneYear, PurchaseResult lastError)
       : super(lastError);
 
   static TestStoreState defaultState(
@@ -188,7 +187,7 @@ class TestStoreState extends StateFromStore {
       return false;
     }
     if (noAdsForever.isNotOwned() && noAdsOneYear.isNotOwned()) {
-      // We know either is owned;
+      // We know neither is owned;
       return true;
     }
     if (noAdsForever.isUnknownPurchaseState() ||

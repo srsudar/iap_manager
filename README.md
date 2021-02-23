@@ -68,15 +68,37 @@ Start by defining your store state. You do this by extending `StateFromStore`.
 An example is shown in the test file.
 
 This class shows that we have two products: a one-time purchase that removes ads
-forever, and a subscription that removes ads for one year.
+forever, and a subscription that removes ads for one year. The `shouldShowAds()`
+function calculates whether or not ads should be shown to the user.
 
 ```dart
 class TestStoreState extends StateFromStore {
+  final bool initialShouldShowAds;
   final InAppProduct noAdsForever;
   final InAppProduct noAdsOneYear;
 
-  TestStoreState(this.noAdsForever, this.noAdsOneYear, PurchaseResult lastError)
+  TestStoreState(this.initialShouldShowAds, this.noAdsForever,
+    this.noAdsOneYear, PurchaseResult lastError)
       : super(lastError);
+
+  bool shouldShowAds() {
+    if (noAdsForever.isOwned() || noAdsOneYear.isOwned()) {
+      // We own either, so it's ok to return false.
+      return false;
+    }
+    if (noAdsForever.isNotOwned() && noAdsOneYear.isNotOwned()) {
+      // We know neither is owned;
+      return true;
+    }
+    if (noAdsForever.isUnknownPurchaseState() ||
+        noAdsOneYear.isUnknownPurchaseState()) {
+      return initialShouldShowAds;
+    }
+
+    // This is an error state.
+    debugPrint('impossible ownership state: $noAdsForever, $noAdsOneYear');
+    return initialShouldShowAds;
+  }
 
   <snip>
 ```
@@ -137,16 +159,8 @@ properly every time.
 
 I use `Provider` to manage state in my app. The root widget of my app looks more
 or less like what is shown below. Note that the `AdManager` class isn't included
-in this package. It is used an example, and is responsible for simply showing or
-hiding a banner ad based on the `shouldShowAds` property of `TestIAPManager`.
-It's API looks like this:
-
-```dart
-class AdManager {
-  showBannderAd();
-  hideBannerAd();
-}
-```
+in this package. It is used an example to show one way that you can incorporate
+`IAPManager` along with any other `Provider`s you might be using. 
 
 This is the root function of an app that uses iap_manager:
 
@@ -184,3 +198,15 @@ This is the root function of an app that uses iap_manager:
    child: MyApp(),
  );
 ```
+
+## Known Limitations
+
+I don't have need for these features, so I don't have a good way to validate
+them, so I haven't implemented them.
+
+* **No consumable items**. IAPs like coins that you can spend are something that
+    I haven't looked into, so they're not supported at the moment.
+* **No first-party validation of purchases.** You can probably still do this
+    yourself using this package, but since it does validate subscriptions (on
+    iOS at least), it might be nice to provide a cleaner hook for this.
+    Nevertheless, for now it does not.
