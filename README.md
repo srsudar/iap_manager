@@ -37,7 +37,7 @@ version.
 On iOS, if you have subscriptions, you'll also need an "App-Specific Shared
 Secret" that serves as a password for Apple's validation server. This is on [App
 Store Connect](https://appstoreconnect.apple.com/apps). Click on your app and go
-to `In-App Purchase | Manage`, and there above the list of purchases you'll see
+to `In-App Purchase | Manage`. Above the list of purchases you'll see
 "App-Specific Shared Secret". Click that, generate a secret, and save it.
 
 ### Classes
@@ -59,6 +59,17 @@ description, price, ownership status) comes from the store.
 `StateFromStore` is your app's local view of a user's IAP state. It contains the
 title and description of your items, and an error message (if something went
 wrong communicating with the store, eg).
+
+#### `IAPPlugin3PWrapper`
+
+This is a simple wrapper around `flutter_inapp_purchase`. I use it to simplify
+testing.
+
+#### `PlatformWrapper`
+
+This is a simple wrapper around `Platform`. If you want to simulate an Android
+environment, you can pass `PlatformWrapper.andoid()`. In production, just use
+`PlatformWrapper()`.
 
 ### Integrating iap_manager Into Your App
 
