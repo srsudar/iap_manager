@@ -107,7 +107,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     return _doneInitializingCompleter.future;
   }
 
-  /// This should be called in initState().
   Future<void> initialize() async {
     debugPrint('IAPManager: calling initialize');
     // This is largely taken from the sample app.
@@ -495,6 +494,12 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     _cxnIsInitialized = false;
   }
 
+  /// Get purchase history from the store. When this future completes, the
+  /// StateFromStore will contain any results that were fetched. Purchases
+  /// will be acked, validated, and finished, as appropriate for the platform.
+  ///
+  /// This method will also call notifyListeners as appropriate, so if you are
+  /// using it as a Provider, you do not need to await the future.
   Future<void> getPurchaseHistory(bool takeOwnershipOfLoading) async {
     debugPrint('IAPManager.getPurchaseHistory'
         '(takeOwnershipOfLoading: $takeOwnershipOfLoading)');
@@ -557,6 +562,11 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     _notifyListenersWithReporter();
   }
 
+  /// Get available products from the store. When this future completes, the
+  /// StateFromStore will contain any results that were fetched.
+  ///
+  /// This method will also call notifyListeners as appropriate, so if you are
+  /// using it as a Provider, you do not need to await the future.
   Future<void> getAvailableProducts(bool takeOwnershipOfLoading) async {
     debugPrint('IAPManager.getAvailableProducts'
         '(takeOwnershipOfLoading: $takeOwnershipOfLoading)');
@@ -612,6 +622,9 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     _notifyListenersWithReporter();
   }
 
+  /// If a plugin error is set on this object, this method resets the state
+  /// and tries to reinitialize the connection. You can use this to try and
+  /// recover from transient errors.
   Future<void> tryToRecoverFromError() async {
     await _resetState();
     _notifyListenersWithReporter();
@@ -624,11 +637,17 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     await getAvailableProducts(true);
   }
 
+  /// Remove a purchase error. Purchase errors do not represent a problem
+  /// with the plugin--they are a natural potential state, eg if a card was
+  /// declined.
   void dismissPurchaseError() {
     _storeState = _storeState.dismissError();
     _notifyListenersWithReporter();
   }
 
+  /// Request a purchase with the given sku. If there are any plugin errors,
+  /// they will be set on pluginErrorMsg. Purchases can complete at any t
+  /// ime, so no loading state is indicated after this method has been called.
   Future<dynamic> requestPurchase(String itemSku) async {
     if (!_cxnIsInitialized) {
       debugPrint('IAPManager.requestPurchase called but cxn not initialized');
