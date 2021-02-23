@@ -61,8 +61,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   // Used to facilitate waiting on initialize() to complete, which is kind of
   // tricky since we call it async in a sync constructor.
   Completer<void> _doneInitializingCompleter;
-  Future<void> _blockForTestingAfterInitializeGetPurchaseHistoryFuture;
-  Future<void> _blockForTestingAfterGetAvailableProductsFuture;
 
   /// This can optionally be provided to callers, typically for testing, and
   /// is invoked when notifyListeners is invoked.
@@ -103,6 +101,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     }
   }
 
+  /// This future completes when the manager is initialized and ready for use.
   Future<void> waitForInitialized() {
     return _doneInitializingCompleter.future;
   }
@@ -183,44 +182,15 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     }
 
     await getPurchaseHistory(false);
-    debugPrint('IAPManager.initialize(): back from getPurchaseHistory');
-    await blockForTestingAfterInitializeGetPurchaseHistory();
     // We don't actually need this here, but it's kind of a hassle to do it
     // intelligently otherwise.
     await getAvailableProducts(false);
-    debugPrint('IAPManager.initialize(): back from getAvailableProducts');
-    await blockForTestingAfterGetAvailableProducts();
 
     _isLoaded = true;
     debugPrint('IAPManager: done initializing: $_isLoaded');
     _isStillInitializing = false;
     _doneInitializingCompleter.complete();
     _notifyListenersWithReporter();
-  }
-
-  @visibleForTesting
-  void setBlockForTestingAfterInitializeGetPurchaseHistory(
-      Future<void> future) {
-    _blockForTestingAfterInitializeGetPurchaseHistoryFuture = future;
-  }
-
-  @visibleForTesting
-  void setBlockForTestingAfterGetAvailableProducts(Future<void> future) async {
-    _blockForTestingAfterGetAvailableProductsFuture = future;
-  }
-
-  @visibleForTesting
-  Future<void> blockForTestingAfterInitializeGetPurchaseHistory() async {
-    if (_blockForTestingAfterInitializeGetPurchaseHistoryFuture != null) {
-      await _blockForTestingAfterInitializeGetPurchaseHistoryFuture;
-    }
-  }
-
-  @visibleForTesting
-  Future<void> blockForTestingAfterGetAvailableProducts() async {
-    if (_blockForTestingAfterGetAvailableProductsFuture != null) {
-      await _blockForTestingAfterGetAvailableProductsFuture;
-    }
   }
 
   /// Note that this method can throw errors! This allows the caller to

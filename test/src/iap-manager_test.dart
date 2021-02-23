@@ -408,18 +408,6 @@ TestIAPManager _buildInitializingIAPManager({
   );
 }
 
-// The worst case scenario for ads is if we've saved not showing ads, and
-// something goes wrong where we show ads. We want to prevent that. This is
-// basically what would happen if someone pays to remove ads then can't
-// connect to the internet or something and we show them ads. Or I make an
-// error in an update and we show them ads.
-//
-// Here are the cases we care about. Start not showing ads, and then:
-//   1. error in initConnection
-//   2. error in getPurchaseHistory
-//   3. error in getAvailableProducts
-//
-// I think these are covered in the various cases below.
 void main() {
   test('initialize happy path', () async {
     IAPPlugin3PWrapper plugin = MockPluginWrapper();
@@ -473,14 +461,6 @@ void main() {
     expect(mgr.isStillInitializing, isTrue);
     expect(mgr.storeState.shouldShowAds(), isTrue);
 
-    // And now, while we're still blocked on initConnection, add some
-    // completers.
-    var blockForPurchases = Completer<void>();
-    var blockForProducts = Completer<void>();
-    mgr.setBlockForTestingAfterInitializeGetPurchaseHistory(
-        blockForPurchases.future);
-    mgr.setBlockForTestingAfterGetAvailableProducts(blockForProducts.future);
-
     initResult.complete('cxn is live');
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
@@ -499,8 +479,6 @@ void main() {
     expect(mgr.isStillInitializing, isTrue);
     expect(mgr.storeState.shouldShowAds(), isFalse);
 
-    blockForPurchases.complete();
-
     // getAvailableProducts
     _MockedIAPItems items = _MockedIAPItems();
     products.complete([items.forLife]);
@@ -509,8 +487,6 @@ void main() {
     expect(mgr.isLoaded, isFalse);
     expect(mgr.isStillInitializing, isTrue);
     expect(mgr.storeState.shouldShowAds(), isFalse);
-
-    blockForProducts.complete();
 
     await mgr.waitForInitialized();
 
