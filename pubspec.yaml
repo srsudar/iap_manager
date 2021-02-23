@@ -1,8 +1,8 @@
 name: iap_manager
-description: A new Flutter package project.
+description: Help manage your Flutter In-App Purchases.
 version: 0.0.1
-author:
-homepage:
+author: https://github.com/srsudar
+homepage: https://github.com/srsudar/iap_manager
 
 environment:
   sdk: ">=2.7.0 <3.0.0"
@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
 
   flutter_inapp_purchase: ^3.0.1
+  http: ^0.12.2
 
 dev_dependencies:
   test:
