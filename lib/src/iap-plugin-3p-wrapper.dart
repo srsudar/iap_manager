@@ -16,8 +16,8 @@ class IAPPlugin3PWrapper {
     return FlutterInappPurchase.instance.getSubscriptions(subscriptionIds);
   }
 
-  Future<List<PurchasedItem>> getPurchaseHistory() async {
-    return FlutterInappPurchase.instance.getPurchaseHistory();
+  Future<List<PurchasedItem>> getAvailablePurchases() async {
+    return FlutterInappPurchase.instance.getAvailablePurchases();
   }
 
   Stream<PurchasedItem> getPurchaseUpdatedStream() {

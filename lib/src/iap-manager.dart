@@ -70,6 +70,11 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   /// errors if initConnection didn't complete.
   bool _cxnIsInitialized = false;
 
+  /// True if IAPManager should log verbosely even in release mode. Normally
+  /// logging is suppressed in release mode. This can be useful if you are
+  /// debugging store interactions.
+  final bool logInReleaseMode;
+
   T get storeState => _storeState;
   bool get isLoaded => _isLoaded;
   bool get isStillInitializing => _isStillInitializing;
@@ -77,16 +82,24 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   String get pluginErrorMsg => _pluginErrorMsg;
 
   IAPManager(
-    this._plugin,
-    this._iosSharedSecret,
-    this._storeState,
-    void Function() notifyListenersInvokedCallback,
-    PlatformWrapper platformWrapper,
-  ) {
+      this._plugin,
+      this._iosSharedSecret,
+      this._storeState,
+      void Function() notifyListenersInvokedCallback,
+      PlatformWrapper platformWrapper,
+      {this.logInReleaseMode = false}) {
     _notifyListenersInvokedCallback = notifyListenersInvokedCallback;
     _platformWrapper = platformWrapper ?? PlatformWrapper();
 
     initialize();
+  }
+
+  void _maybeLog(String msg) {
+    if (logInReleaseMode) {
+      print(msg);
+    } else {
+      debugPrint(msg);
+    }
   }
 
   /// This calls notifyListeners and also informs callers when
@@ -94,7 +107,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   /// general, we should avoid calls to notifyListners() in this class and
   /// wrap everything in this call instead.
   void _notifyListenersWithReporter() {
-    debugPrint('going to notify listeners, loaded: $_isLoaded');
+    _maybeLog('going to notify listeners, loaded: $_isLoaded');
     notifyListeners();
     if (_notifyListenersInvokedCallback != null) {
       _notifyListenersInvokedCallback();
@@ -107,23 +120,23 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
-    debugPrint('IAPManager: calling initialize');
+    _maybeLog('IAPManager: calling initialize');
     // This is largely taken from the sample app.
     // https://github.com/dooboolab/flutter_inapp_purchase/blob/master/example/README.md
     if (_plugin == null) {
-      debugPrint('IAPManager IAP plugin not set, doing nothing');
+      _maybeLog('IAPManager IAP plugin not set, doing nothing');
       return;
     }
 
     if (_isStillInitializing) {
-      debugPrint('IAPManager: initialize() called but already initializing, '
+      _maybeLog('IAPManager: initialize() called but already initializing, '
           'doing nothing');
       return;
     }
 
     _isStillInitializing = true;
     _doneInitializingCompleter = Completer<void>();
-    debugPrint('IAPManager.initialize: setting _isLoaded = false');
+    _maybeLog('IAPManager.initialize: setting _isLoaded = false');
     _isLoaded = false;
 
     if (!_cxnIsInitialized) {
@@ -133,9 +146,9 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
         // We are leaving this here because it is an easy way to trigger an
         // error, although I don't know if it should.
         // dynamic consumeResult = await _plugin.consumeAllItems();
-        // debugPrint('consumed all items: $consumeResult');
+        // _printToLog('consumed all items: $consumeResult');
       } catch (e) {
-        debugPrint('IAPManager initConnection: ugly universal catch block: $e');
+        _maybeLog('IAPManager initConnection: ugly universal catch block: $e');
         _pluginErrorMsg = e.toString();
         _isLoaded = true;
         _isStillInitializing = false;
@@ -145,7 +158,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
       }
     }
 
-    debugPrint('IAPManager: initialized connection');
+    _maybeLog('IAPManager: initialized connection');
 
     // Do this check so that initialize is safe to call twice in an effort to
     // recover from errors.
@@ -153,12 +166,12 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
       _purchaseUpdatedSubscription = _plugin
           .getPurchaseUpdatedStream()
           .listen((PurchasedItem purchasedItem) async {
-        debugPrint('IAPManager: got a new purchase: $_storeState');
+        _maybeLog('IAPManager: got a new purchase: $_storeState');
 
         try {
           await _handlePurchase(purchasedItem, Set<String>());
         } catch (e) {
-          debugPrint('IAPManager error handling purchase: $e');
+          _maybeLog('IAPManager error handling purchase: $e');
           _pluginErrorMsg = e.toString();
         }
 
@@ -174,20 +187,20 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
           return;
         }
         _storeState = _storeState.takeError(errorResult);
-        debugPrint('IAPManager: new error: $_storeState');
+        _maybeLog('IAPManager: new error: $_storeState');
         _notifyListenersWithReporter();
       });
 
       _subscribedToStreams = true;
     }
 
-    await getPurchaseHistory(false);
+    await getAvailablePurchases(false);
     // We don't actually need this here, but it's kind of a hassle to do it
     // intelligently otherwise.
     await getAvailableProducts(false);
 
     _isLoaded = true;
-    debugPrint('IAPManager: done initializing: $_isLoaded');
+    _maybeLog('IAPManager: done initializing: $_isLoaded');
     _isStillInitializing = false;
     _doneInitializingCompleter.complete();
     _notifyListenersWithReporter();
@@ -224,17 +237,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   /// See notes in the relevant methods.
   Future<bool> _handlePurchase(
       PurchasedItem item, Set<String> iosValidatedSubProductIDs) async {
-    if (item.transactionId == null) {
-      // After using the test card that auto-declines, we are getting some
-      // events in our purchase history that aren't obviously declined.
-      // Looking at the debug values, however, they have no transactionId.
-      // We're going to ignore those, assuming that they are not what we care
-      // about.
-      debugPrint(
-          'IAPManager got an item with no transactionId: ${item.logFriendlyToString()}');
-      return false;
-    }
-
     if (_platformWrapper.isAndroid) {
       return await _handlePurchaseAndroid(item);
     }
@@ -247,25 +249,30 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   }
 
   Future<bool> _handlePurchaseAndroid(PurchasedItem item) async {
-    debugPrint(
+    _maybeLog(
         'IAPManager._handlePurchaseAndroid: purchaseStateAndroid: ${item.purchaseStateAndroid}');
-    debugPrint(
+    _maybeLog(
         'IAPManager._handlePurchaseAndroid: isAcknowledgedAndroid: ${item.isAcknowledgedAndroid}');
+    // Here are some example items from the log (these were returned by
+    // getAvailablePurchases).
+    // I/flutter (31748): XXX IAPManager: got purchaseHistory with [1] purchases
+    // I/flutter (31748): XXX IAPManager: found a purchased item: PurchasedItem{  productId: remove_ads_onetime,  transactionId: GPA.3372-8155-6663-62256,  isAcknowledgeAndroid: true,  purchaseStateAndroid: PurchaseState.purchased,  transactionStateIOS: null,}
+    // I/flutter (31748): XXX IAPManager: full details: productId: remove_ads_onetime, transactionId: GPA.3372-8155-6663-62256, transactionDate: 2021-02-28T19:08:32.125, transactionReceipt: {"orderId":"GPA.3372-8155-6663-62256","packageName":"com.strixwing.glug","productId":"remove_ads_onetime","purchaseTime":1614568112125,"purchaseState":0,"purchaseToken":"edmocmijkpapdflcfmfflomj.AO-J1Oxlg7UjNrGQw2U7oOH9LdKk1Evqrk1IcEAvrrVC96r_bpcreAlpi46YczmLvf2gcGzem7WbcRB5puon8qaAxdDaNqRyng","acknowledged":true}, purchaseToken: edmocmijkpapdflcfmfflomj.AO-J1Oxlg7UjNrGQw2U7oOH9LdKk1Evqrk1IcEAvrrVC96r_bpcreAlpi46YczmLvf2gcGzem7WbcRB5puon8qaAxdDaNqRyng, orderId: GPA.3372-8155-6663-62256, dataAndroid: null, signatureAndroid: ACsvcpfT0zz3f3r0OWWZPpTk6vz6vYjNcN8/ZZH3TaNal8RbHGNJaatGdGS6Q4pTnbqRXYx6ISdz52+5rKPuXXg0TEa72HWPPvi5Ivwq/6hlfEZVsw1UwnqhLeSLdsGCl1VtYdLgVK0vdtsRZsRoDgcod1A4C/OB6vENAIuKuQEnvTKXk62fmW1TBe2RmsAxA6dG4k+7myipBZyFSzNZ7qfelgOnQuRe7hw91EqcIFFbPoFh+Sc8GG5JyxacWgY+96ERBUVkLGXz4/zt7GrsL2hg8HNdXem6H4VgdPEjZ/jjh+s4L+g8R0hP8ynd0nLQG8wHJaMSZP
 
     bool result = false;
 
     if (item.purchaseStateAndroid == PurchaseState.purchased) {
       if (!item.isAcknowledgedAndroid) {
-        debugPrint('IAPManager._handlePurchaseAndroid need to ack purchase');
+        _maybeLog('IAPManager._handlePurchaseAndroid need to ack purchase');
         // "Lastly, if you want to abstract three different methods into one,
         // consider using finishTransaction method."
         // https://pub.dev/packages/flutter_inapp_purchase
         String finishTxnResult = await _plugin.finishTransaction(item);
-        debugPrint('IAPManager._handlePurchaseAndroid: acknowledged '
+        _maybeLog('IAPManager._handlePurchaseAndroid: acknowledged '
             'successfully: '
             '$finishTxnResult');
       } else {
-        debugPrint('IAPManager._handlePurchaseAndroid: do not need to ack '
+        _maybeLog('IAPManager._handlePurchaseAndroid: do not need to ack '
             'purchase');
       }
       // It's been purchased and we own it.
@@ -287,12 +294,12 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
       if (_storeState.itemIsSubscription(item)) {
         if (!iosValidatedSubProductIDs.contains(item.productId)) {
           // Subscriptions are special cased on iOS.
-          debugPrint('IAPManager._handlePurchaseIOS: found subscription, '
+          _maybeLog('IAPManager._handlePurchaseIOS: found subscription, '
               'going to validate'
               ' receipt');
           try {
             bool ownSub = await _iosSubscriptionIsActive(item);
-            debugPrint('IAPManager._handlePurchaseIOS: sub is owned: $ownSub');
+            _maybeLog('IAPManager._handlePurchaseIOS: sub is owned: $ownSub');
             if (ownSub) {
               _storeState = _storeState.takePurchase(item);
               result = true;
@@ -302,14 +309,14 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
             }
             isIOSAndFutureSubscriptionCallsUnnecessary = true;
           } catch (e) {
-            debugPrint('IAPManager._handlePurchaseIOS: ugly universal catch '
+            _maybeLog('IAPManager._handlePurchaseIOS: ugly universal catch '
                 'block: $e');
             _storeState =
                 _storeState.takePurchaseUnknown(item, errMsg: e.toString());
             result = true;
           }
         } else {
-          debugPrint('IAPManager._handlePurchaseIOS: already validated '
+          _maybeLog('IAPManager._handlePurchaseIOS: already validated '
               'subscription '
               'with id: ${item.productId}');
         }
@@ -345,14 +352,14 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     // Always use prod first--see above.
     var json = await _validateTransactionIOSHelper(item, false);
     if (_statusEquals(json, _IOS_STATUS_IS_SANDBOX)) {
-      debugPrint('IAPManager: item was sandbox purchase');
+      _maybeLog('IAPManager: item was sandbox purchase');
       json = await _validateTransactionIOSHelper(item, true);
     }
     if (!_statusEquals(json, _IOS_STATUS_IS_OK)) {
       throw Exception('iOS subscription validation status not ok: '
           '${json['status']}');
     }
-    debugPrint(
+    _maybeLog(
         'IAPManager: parsed validation receipt for subscription with sku: '
         '{${item.productId}');
     return _validationResponseIndicatesActiveSubscription(json);
@@ -384,21 +391,21 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     }
     List<dynamic> pendingRenewalInfoList = body['pending_renewal_info'];
     if (pendingRenewalInfoList == null) {
-      debugPrint('IAPManager: no pending_renewal_info property, returning '
+      _maybeLog('IAPManager: no pending_renewal_info property, returning '
           'false');
       return false;
     }
     if (pendingRenewalInfoList.length < 1) {
-      debugPrint('IAPManager: pending_renewal_info set, but no empty list');
+      _maybeLog('IAPManager: pending_renewal_info set, but no empty list');
       return false;
     }
     if (pendingRenewalInfoList.length > 1) {
-      debugPrint(
+      _maybeLog(
           'IAPManager: pending_renewal_info.length > 1, which is unexpected');
     }
     Map<String, dynamic> pendingRenewalInfo =
         pendingRenewalInfoList[0] as Map<String, dynamic>;
-    debugPrint(
+    _maybeLog(
         'IAPManager: pending_renewal_info successfully parsed: $pendingRenewalInfo');
     // If non-null, then it has been canceled.
     return pendingRenewalInfo['expiration_intent'] == null;
@@ -440,7 +447,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   }
 
   Future<void> _resetState() async {
-    debugPrint('IAPManager._resetState');
+    _maybeLog('IAPManager._resetState');
     _purchaseUpdatedSubscription?.cancel();
     _purchaseUpdatedSubscription = null;
     _purchaseErrorSubscription?.cancel();
@@ -458,7 +465,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
       try {
         await _plugin.endConnection();
       } catch (e) {
-        debugPrint('IAPManager.resetState: ugly universal catch block, $e');
+        _maybeLog('IAPManager.resetState: ugly universal catch block, $e');
       }
     }
     _cxnIsInitialized = false;
@@ -470,17 +477,17 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   ///
   /// This method will also call notifyListeners as appropriate, so if you are
   /// using it as a Provider, you do not need to await the future.
-  Future<void> getPurchaseHistory(bool takeOwnershipOfLoading) async {
-    debugPrint('IAPManager.getPurchaseHistory'
+  Future<void> getAvailablePurchases(bool takeOwnershipOfLoading) async {
+    _maybeLog('IAPManager.getPurchaseHistory'
         '(takeOwnershipOfLoading: $takeOwnershipOfLoading)');
     if (!_cxnIsInitialized) {
-      debugPrint(
+      _maybeLog(
           'IAPManager: getPurchaseHistory called but cxn not initialized');
       return;
     }
 
     if (_isFetchingPurchaseHistory) {
-      debugPrint('IAPManager: getPurchaseHistory called but already in '
+      _maybeLog('IAPManager: getPurchaseHistory called but already in '
           'flight, ignoring');
       return;
     }
@@ -494,8 +501,8 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     // that is enough.
     _notifyListenersWithReporter();
     try {
-      List<PurchasedItem> purchases = await _plugin.getPurchaseHistory();
-      debugPrint('IAPManager: got purchaseHistory with [${purchases.length}] '
+      List<PurchasedItem> purchases = await _plugin.getAvailablePurchases();
+      _maybeLog('IAPManager: got purchaseHistory with [${purchases.length}] '
           'purchases');
 
       // See the long comment on _handlePurchase about what this is doing.
@@ -505,8 +512,9 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
       // NOT_OWNED.
       Set<String> handledPurchaseIDs = Set<String>();
       for (PurchasedItem item in purchases) {
-        debugPrint(
+        _maybeLog(
             'IAPManager: found a purchased item: ${item.logFriendlyToString()}');
+        _maybeLog('IAPManager: full details: $item');
 
         bool updatedState = await _handlePurchase(
             item, isIOSAndFutureSubscriptionCallsUnnecessaryIDs);
@@ -515,20 +523,20 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
         }
       }
       _storeState = _storeState.setNotOwnedExcept(handledPurchaseIDs);
-      debugPrint('IAPManager: new state: $_storeState');
+      _maybeLog('IAPManager: new state: $_storeState');
     } catch (e) {
-      debugPrint('getPurchaseHistory: ugly universal catch block: $e');
+      _maybeLog('getPurchaseHistory: ugly universal catch block: $e');
       _pluginErrorMsg = e.toString();
     }
 
     if (takeOwnershipOfLoading) {
-      debugPrint('IAPManager: getPurchaseHistory setting _isLoaded = true');
+      _maybeLog('IAPManager: getPurchaseHistory setting _isLoaded = true');
       _isLoaded = true;
     }
 
     _isFetchingPurchaseHistory = false;
 
-    debugPrint('IAPManager: loaded purchases: $_storeState');
+    _maybeLog('IAPManager: loaded purchases: $_storeState');
     _notifyListenersWithReporter();
   }
 
@@ -538,16 +546,16 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   /// This method will also call notifyListeners as appropriate, so if you are
   /// using it as a Provider, you do not need to await the future.
   Future<void> getAvailableProducts(bool takeOwnershipOfLoading) async {
-    debugPrint('IAPManager.getAvailableProducts'
+    _maybeLog('IAPManager.getAvailableProducts'
         '(takeOwnershipOfLoading: $takeOwnershipOfLoading)');
     if (!_cxnIsInitialized) {
-      debugPrint('IAPManager.getAvailableProducts called but cxn not '
+      _maybeLog('IAPManager.getAvailableProducts called but cxn not '
           'initialized');
       return;
     }
 
     if (_isFetchingProducts) {
-      debugPrint('IAPManager: getAvailableProducts called but already in '
+      _maybeLog('IAPManager: getAvailableProducts called but already in '
           'flight, ignoring');
       return;
     }
@@ -570,20 +578,20 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
       // different.
       List<IAPItem> items =
           fetchResult.expand((i) => i).toList().toSet().toList();
-      debugPrint(
+      _maybeLog(
           'IAPManager: fetched available products. length: ${items.length}');
-      debugPrint('IAPManager: fetched available products: $items');
+      _maybeLog('IAPManager: fetched available products: $items');
 
       for (IAPItem item in items) {
         _storeState = _storeState.takeAvailableProduct(item);
       }
     } catch (e) {
-      debugPrint('IAPManager.getAvailableProducts: ugly universal catch: $e');
+      _maybeLog('IAPManager.getAvailableProducts: ugly universal catch: $e');
       _pluginErrorMsg = e.toString();
     }
 
     if (takeOwnershipOfLoading) {
-      debugPrint('IAPManager: loaded products: $_storeState');
+      _maybeLog('IAPManager: loaded products: $_storeState');
       _isLoaded = true;
     }
 
@@ -620,18 +628,18 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   /// ime, so no loading state is indicated after this method has been called.
   Future<dynamic> requestPurchase(String itemSku) async {
     if (!_cxnIsInitialized) {
-      debugPrint('IAPManager.requestPurchase called but cxn not initialized');
+      _maybeLog('IAPManager.requestPurchase called but cxn not initialized');
       return;
     }
     if (itemSku == null) {
-      debugPrint('IAPManager.requestPurchase: itemSku is null, no-op');
+      _maybeLog('IAPManager.requestPurchase: itemSku is null, no-op');
       return;
     }
-    debugPrint('requesting purchase for itemSku: $itemSku');
+    _maybeLog('requesting purchase for itemSku: $itemSku');
     try {
       return await _plugin.requestPurchase(itemSku);
     } catch (e) {
-      debugPrint('IAPManager.dismissPurchaseError: ugly universal catch '
+      _maybeLog('IAPManager.dismissPurchaseError: ugly universal catch '
           'block: $e');
       _pluginErrorMsg = e.toString();
       _notifyListenersWithReporter();
