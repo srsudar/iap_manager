@@ -158,7 +158,7 @@ abstract class StateFromStore {
   /// This is used for setting purchases in a known not purchased state. All
   /// products will be set to NOT_OWNED, except for those in ignoreTheseIDs.
   /// This is because you know something is NOT_OWNED if it is absent from a
-  /// getPurchaseHistory request.
+  /// getAvailablePurchases request.
   StateFromStore setNotOwnedExcept(Set<String> ignoreTheseIDs);
 
   /// Add an error to the known state.

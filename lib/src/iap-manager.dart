@@ -55,7 +55,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   /// True if a getAvailablePurchases request is in flight.
   bool _isFetchingAvailablePurchases = false;
 
-  /// True if a getProductHistory request is in flight.
+  /// True if a getAvailableProducts request is in flight.
   bool _isFetchingProducts = false;
 
   // Used to facilitate waiting on initialize() to complete, which is kind of
@@ -467,7 +467,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     _cxnIsInitialized = false;
   }
 
-  /// Get purchase history from the store. When this future completes, the
+  /// Get available purchases from the store. When this future completes, the
   /// StateFromStore will contain any results that were fetched. Purchases
   /// will be acked, validated, and finished, as appropriate for the platform.
   ///
@@ -497,7 +497,7 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     _notifyListenersWithReporter();
     try {
       List<PurchasedItem> purchases = await _plugin.getAvailablePurchases();
-      _maybeLog('got purchaseHistory with [${purchases.length}] '
+      _maybeLog('got availablePurchases with [${purchases.length}] '
           'purchases');
 
       // See the long comment on _handlePurchase about what this is doing.
