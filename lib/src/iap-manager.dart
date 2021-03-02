@@ -26,6 +26,38 @@ extension IAPManagerUtil on PurchasedItem {
         '  transactionStateIOS: ${this.transactionStateIOS},'
         '}';
   }
+
+  /// Return true if the item is acknowledged. This is safer than the default
+  /// property, because this can never return null. It also is smart enough
+  /// to check in transactionReceipt for acknowledged, which is set at least
+  /// on subscriptions.
+  bool isAcknowledgedAndroidSafe() {
+    if (this.isAcknowledgedAndroid != null) {
+      return this.isAcknowledgedAndroid;
+    }
+
+    // Otherwise, try to get state from the transactionReceipt. See the test
+    // files for examples of responses from the plugin that makes this
+    // necessary, as well as this blogpost:
+    //
+    // https://medium.com/bosc-tech-labs-private-limited/how-to-implement-subscriptions-in-app-purchase-in-flutter-7ce8906e608a
+    //
+    // And this PR:
+    //
+    // https://github.com/dooboolab/flutter_inapp_purchase/issues/234
+    if (this.transactionReceipt == null || this.transactionReceipt == '') {
+      throw Exception('cannot determine if purchase is acknowledged, no '
+          'transactionReceipt');
+    }
+
+    Map<String, dynamic> parsed = json.decode(this.transactionReceipt);
+    if (!parsed.containsKey('acknowledged')) {
+      throw Exception('cannot determine if purchase is acknowledged, no '
+          'acknowledged key transactionReceipt');
+    }
+
+    return parsed['acknowledged'];
+  }
 }
 
 /// Manages in-app purchases. This is essentially a wrapper around the
@@ -252,17 +284,17 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     _maybeLog(
         '_handlePurchaseAndroid(): purchaseStateAndroid: ${item.purchaseStateAndroid}');
     _maybeLog(
-        '_handlePurchaseAndroid(): isAcknowledgedAndroid: ${item.isAcknowledgedAndroid}');
+        '_handlePurchaseAndroid(): isAcknowledgedAndroidSafe: ${item.isAcknowledgedAndroidSafe()}');
     // Here are some example items from the log (these were returned by
     // getAvailablePurchases).
     // I/flutter (31748): XXX IAPManager: got purchaseHistory with [1] purchases
     // I/flutter (31748): XXX IAPManager: found a purchased item: PurchasedItem{  productId: remove_ads_onetime,  transactionId: GPA.3372-8155-6663-62256,  isAcknowledgeAndroid: true,  purchaseStateAndroid: PurchaseState.purchased,  transactionStateIOS: null,}
-    // I/flutter (31748): XXX IAPManager: full details: productId: remove_ads_onetime, transactionId: GPA.3372-8155-6663-62256, transactionDate: 2021-02-28T19:08:32.125, transactionReceipt: {"orderId":"GPA.3372-8155-6663-62256","packageName":"com.strixwing.glug","productId":"remove_ads_onetime","purchaseTime":1614568112125,"purchaseState":0,"purchaseToken":"edmocmijkpapdflcfmfflomj.AO-J1Oxlg7UjNrGQw2U7oOH9LdKk1Evqrk1IcEAvrrVC96r_bpcreAlpi46YczmLvf2gcGzem7WbcRB5puon8qaAxdDaNqRyng","acknowledged":true}, purchaseToken: edmocmijkpapdflcfmfflomj.AO-J1Oxlg7UjNrGQw2U7oOH9LdKk1Evqrk1IcEAvrrVC96r_bpcreAlpi46YczmLvf2gcGzem7WbcRB5puon8qaAxdDaNqRyng, orderId: GPA.3372-8155-6663-62256, dataAndroid: null, signatureAndroid: ACsvcpfT0zz3f3r0OWWZPpTk6vz6vYjNcN8/ZZH3TaNal8RbHGNJaatGdGS6Q4pTnbqRXYx6ISdz52+5rKPuXXg0TEa72HWPPvi5Ivwq/6hlfEZVsw1UwnqhLeSLdsGCl1VtYdLgVK0vdtsRZsRoDgcod1A4C/OB6vENAIuKuQEnvTKXk62fmW1TBe2RmsAxA6dG4k+7myipBZyFSzNZ7qfelgOnQuRe7hw91EqcIFFbPoFh+Sc8GG5JyxacWgY+96ERBUVkLGXz4/zt7GrsL2hg8HNdXem6H4VgdPEjZ/jjh+s4L+g8R0hP8ynd0nLQG8wHJaMSZP
+    // I/flutter (31748): XXX IAPManager: full details: productId: remove_ads_onetime, transactionId: GPA.3372-8155-6663-62256, transactionDate: 2021-02-28T19:08:32.125, transactionReceipt: {"orderId":"GPA.3372-8155-6663-62256","packageName":"com.foobar.baz","productId":"remove_ads_onetime","purchaseTime":1614568112125,"purchaseState":0,"purchaseToken":"edmocmijkpapdflcfmfflomj.AO-J1Oxlg7UjNrGQw2U7oOH9LdKk1Evqrk1IcEAvrrVC96r_bpcreAlpi46YczmLvf2gcGzem7WbcRB5puon8qaAxdDaNqRyng","acknowledged":true}, purchaseToken: edmocmijkpapdflcfmfflomj.AO-J1Oxlg7UjNrGQw2U7oOH9LdKk1Evqrk1IcEAvrrVC96r_bpcreAlpi46YczmLvf2gcGzem7WbcRB5puon8qaAxdDaNqRyng, orderId: GPA.3372-8155-6663-62256, dataAndroid: null, signatureAndroid: ACsvcpfT0zz3f3r0OWWZPpTk6vz6vYjNcN8/ZZH3TaNal8RbHGNJaatGdGS6Q4pTnbqRXYx6ISdz52+5rKPuXXg0TEa72HWPPvi5Ivwq/6hlfEZVsw1UwnqhLeSLdsGCl1VtYdLgVK0vdtsRZsRoDgcod1A4C/OB6vENAIuKuQEnvTKXk62fmW1TBe2RmsAxA6dG4k+7myipBZyFSzNZ7qfelgOnQuRe7hw91EqcIFFbPoFh+Sc8GG5JyxacWgY+96ERBUVkLGXz4/zt7GrsL2hg8HNdXem6H4VgdPEjZ/jjh+s4L+g8R0hP8ynd0nLQG8wHJaMSZP
 
     bool result = false;
 
     if (item.purchaseStateAndroid == PurchaseState.purchased) {
-      if (!item.isAcknowledgedAndroid) {
+      if (!item.isAcknowledgedAndroidSafe()) {
         _maybeLog('_handlePurchaseAndroid(): need to ack purchase');
         // "Lastly, if you want to abstract three different methods into one,
         // consider using finishTransaction method."
