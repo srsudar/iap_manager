@@ -316,6 +316,12 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
 
   Future<bool> _handlePurchaseIOS(
       PurchasedItem item, Set<String> iosValidatedSubProductIDs) async {
+    if (item.transactionStateIOS == TransactionState.deferred ||
+        item.transactionStateIOS == TransactionState.purchasing) {
+      // Do nothing.
+      return false;
+    }
+
     bool isIOSAndFutureSubscriptionCallsUnnecessary = false;
     bool result = false;
     if (item.transactionStateIOS == TransactionState.purchased ||
@@ -357,11 +363,11 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
         _storeState = _storeState.takePurchase(item);
         result = true;
       }
-
-      // We need to call finishTransaction on all purchases I think, both
-      // purchased and restored, subs and non-consumables.
-      await _plugin.finishTransaction(item);
     }
+
+    // We need to call finishTransaction on all purchases that are not
+    // deferred or purchasing.
+    await _plugin.finishTransaction(item);
 
     if (isIOSAndFutureSubscriptionCallsUnnecessary) {
       iosValidatedSubProductIDs.add(item.productId);
@@ -505,6 +511,12 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   ///
   /// This method will also call notifyListeners as appropriate, so if you are
   /// using it as a Provider, you do not need to await the future.
+  ///
+  /// restoreIfIOS is true to get historical purchases on iOS (this is
+  /// ignored on Android). On Android, it is cheap to get all available
+  /// purchases. This is not true on iOS, where the user can be prompted to
+  /// log in to the store. This might be jarring, so it should only be called
+  /// when this is intended.
   Future<void> getAvailablePurchases(bool takeOwnershipOfLoading) async {
     _maybeLog('getAvailablePurchases'
         '(takeOwnershipOfLoading: $takeOwnershipOfLoading)');
@@ -566,6 +578,11 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
 
     _maybeLog('loaded purchases: $_storeState');
     _notifyListenersWithReporter();
+  }
+
+  /// Prepare to display this screen to the user.
+  Future<void> loadInfoForDisplay() async {
+    throw Exception('unimplemented');
   }
 
   /// Get available products from the store. When this future completes, the

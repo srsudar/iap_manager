@@ -61,7 +61,7 @@ class _LogModeTestCase {
   _LogModeTestCase(this.label, this.logInRelaseMode);
 }
 
-class _SubValidationFailsTestCase {
+class _IOSNativeSubValidationFailsTestCase {
   final String label;
   final int respCode;
   final String respBody;
@@ -72,7 +72,7 @@ class _SubValidationFailsTestCase {
   final bool shouldHaveErrorMsg;
   final OwnedState wantOwnedState;
 
-  _SubValidationFailsTestCase({
+  _IOSNativeSubValidationFailsTestCase({
     this.label,
     this.respCode,
     this.respBody,
@@ -96,6 +96,33 @@ class _AndroidSubscriptionTestCase {
     this.wantDidAck,
     this.wantOwned,
   });
+}
+
+class _AndroidNonConsumableTestCase {
+  final String label;
+  final bool isAcked;
+  final PurchaseState purchaseState;
+
+  final bool wantDidFinishTransaction;
+  final bool wantNoAdsForeverOwned;
+
+  _AndroidNonConsumableTestCase(
+      {this.label,
+      this.isAcked,
+      this.purchaseState,
+      this.wantDidFinishTransaction,
+      this.wantNoAdsForeverOwned});
+}
+
+class _IOSGetAvailableNonConsumableTestCase {
+  final String label;
+  final PurchasedItem item;
+
+  final bool wantDidFinishTransaction;
+  final bool wantOwned;
+
+  _IOSGetAvailableNonConsumableTestCase(
+      {this.label, this.item, this.wantDidFinishTransaction, this.wantOwned});
 }
 
 class _MockedIAPItems {
@@ -585,6 +612,306 @@ PurchasedItem _getImmediateAndroidSubscription(
   return result;
 }
 
+/// Get an immediate purchase, as is seen directly after the purchase is made.
+/// This is taken straight from the app. Oh shoot, I missed the long strings
+/// on these ones.
+///
+/// json = {_InternalLinkedHashMap} size = 12
+///  0 = {map entry} "productId" -> "remove_ads_onetime"
+///  1 = {map entry} "transactionId" -> "GPA.3317-3224-8880-76256"
+///  2 = {map entry} "transactionDate" -> 1615004426071
+///  3 = {map entry} "transactionReceipt" -> "{\"orderId\":\"GPA
+///  .3317-3224-8880-76256\",\"packageName\":\"com.foobar.baz\",\"productId\":\"remove_ads_one..."
+///  4 = {map entry} "purchaseToken" -> "dgjdeghlfoaokbhhpbklnbhk
+///  .AO-J1OwHDr5-EMVP6t1THm-2aY5QUAutjAogg653iQEDN0_db5Y1-tudQ8pS7S-_Oz_MIphN8xv..."
+///  5 = {map entry} "orderId" -> "GPA.3317-3224-8880-76256"
+///  6 = {map entry} "dataAndroid" -> "{\"orderId\":\"GPA
+///  .3317-3224-8880-76256\",\"packageName\":\"com.foobar.baz\",\"productId\":\"remove_ads_one..."
+///  7 = {map entry} "signatureAndroid" -> "ELr3Ovutt5ZdfsIZXSCbXOjsSy0W0ZFxc
+///  LLBOGnurlRjLxJRAPGIkP2Sf6nAXJuYg+22dvo5zoS5c0iGI+AdQ0MsqZbHhAUT94vO..."
+///  8 = {map entry} "autoRenewingAndroid" -> false
+///  9 = {map entry} "isAcknowledgedAndroid" -> false
+///  10 = {map entry} "purchaseStateAndroid" -> 1
+///  11 = {map entry} "originalJsonAndroid" -> "{\"orderId\":\"GPA
+///  .3317-3224-8880-76256\",\"packageName\":\"com.foobar.baz\",\"productId\":\"remove_ads_one..."
+///
+/// item = {PurchasedItem} productId: remove_ads_onetime, transactionId: GPA
+/// .3317-3224-8880-76256, transactionDate: 2021-03-05T20:20:26.071, transactionRec
+///  productId = "remove_ads_onetime"
+///  transactionId = "GPA.3317-3224-8880-76256"
+///  transactionDate = {DateTime} 2021-03-05 20:20:26.071
+///  transactionReceipt = "{\"orderId\":\"GPA.3317-3224-8880-76256\",
+///  \"packageName\":\"com.foobar.baz\",\"productId\":\"remove_ads_onetime\",\"purchaseTime\":1615004"
+///  purchaseToken = "dgjdeghlfoaokbhhpbklnbhk
+///  .AO-J1OwHDr5-EMVP6t1THm-2aY5QUAutjAogg653iQEDN0_db5Y1-tudQ8pS7S-_Oz_MIphN8xv6dBc8C0yissNZ_FRfIkfu6Q"
+///  orderId = "GPA.3317-3224-8880-76256"
+///  dataAndroid = "{\"orderId\":\"GPA.3317-3224-8880-76256\",\"packageName
+///  \":\"com.foobar.baz\",\"productId\":\"remove_ads_onetime\",\"purchaseTime\":1615004"
+///  signatureAndroid = "ELr3Ovutt5ZdfsIZXSCbXOjsSy0W0ZFxcLLBOGnurlRjLxJRAPGI
+///  kP2Sf6nAXJuYg+22dvo5zoS5c0iGI+AdQ0MsqZbHhAUT94vOz0HiOburadT2fkf6rzkhkLD3/DDJ"
+///  autoRenewingAndroid = false
+///  isAcknowledgedAndroid = false
+///  purchaseStateAndroid = {PurchaseState} PurchaseState.purchased
+///  originalJsonAndroid = "{\"orderId\":\"GPA.3317-3224-8880-76256\",
+///  \"packageName\":\"com.foobar.baz\",\"productId\":\"remove_ads_onetime\",\"purchaseTime\":1615004"
+///  originalTransactionDateIOS = null
+///  originalTransactionIdentifierIOS = null
+///  transactionStateIOS = null
+PurchasedItem _getImmediateAndroidNonConsumable(
+    PurchaseState purchaseState, bool acked) {
+  PurchasedItem result = MockPurchasedItem();
+  when(result.productId).thenReturn('remove_ads_onetime');
+  when(result.transactionId).thenReturn('GPA.3317-3224-8880-76256');
+  when(result.transactionDate).thenReturn(DateTime(2021, 03, 05, 20, 20, 26));
+  when(result.transactionReceipt).thenReturn('fake-txn-receipt');
+  when(result.purchaseToken).thenReturn('fake-purchase-token');
+  when(result.orderId).thenReturn('GPA.3317-3224-8880-76256');
+  when(result.dataAndroid).thenReturn('fake-data-android');
+  when(result.signatureAndroid).thenReturn('fake-signature-android');
+  when(result.autoRenewingAndroid).thenReturn(false);
+  when(result.isAcknowledgedAndroid).thenReturn(acked);
+  when(result.purchaseStateAndroid).thenReturn(purchaseState);
+  when(result.originalJsonAndroid).thenReturn('fake-json-android');
+  when(result.originalTransactionDateIOS).thenReturn(null);
+  when(result.originalTransactionIdentifierIOS).thenReturn(null);
+  when(result.transactionStateIOS).thenReturn(null);
+
+  return result;
+}
+
+/// Get a purchase that was recovered from the play store, rather than
+/// returned immediately after being purchased.
+///
+/// json = {_InternalLinkedHashMap} size = 9
+///  0 = {map entry} "productId" -> "remove_ads_onetime"
+///  1 = {map entry} "transactionId" -> "GPA.3317-3224-8880-76256"
+///  2 = {map entry} "transactionDate" -> 1615004426071
+///  3 = {map entry} "transactionReceipt" -> "{\"orderId\":\"GPA
+///  .3317-3224-8880-76256\",\"packageName\":\"com.foobar.baz\",\"productId\":\"remove_ads_one..."
+///  4 = {map entry} "orderId" -> "GPA.3317-3224-8880-76256"
+///  5 = {map entry} "purchaseToken" -> "dgjdeghlfoaokbhhpbklnbhk
+///  .AO-J1OwHDr5-EMVP6t1THm-2aY5QUAutjAogg653iQEDN0_db5Y1-tudQ8pS7S-_Oz_MIphN8xv..."
+///  6 = {map entry} "signatureAndroid" -> "TElDJvEQA0PFHDfaC1Mrh0hkisXkCU7Ot
+///  /OWZ32SaTtqcICxD6zZR3ltIBulzqXJzTQiZZ0hJKc3RfPCEXEqq0yeHDpk2BSrVR1U..."
+///  7 = {map entry} "purchaseStateAndroid" -> 1
+///  8 = {map entry} "isAcknowledgedAndroid" -> true
+///
+///
+///  item = {PurchasedItem} productId: remove_ads_onetime, transactionId: GPA
+///  .3317-3224-8880-76256, transactionDate: 2021-03-05T20:20:26.071, transactionRec
+///  productId = "remove_ads_onetime"
+///  transactionId = "GPA.3317-3224-8880-76256"
+///  transactionDate = {DateTime} 2021-03-05 20:20:26.071
+///  transactionReceipt = "{\"orderId\":\"GPA.3317-3224-8880-76256\",
+///  \"packageName\":\"com.foobar.baz\",\"productId\":\"remove_ads_onetime\",\"purchaseTime\":1615004"
+///  purchaseToken = "dgjdeghlfoaokbhhpbklnbhk
+///  .AO-J1OwHDr5-EMVP6t1THm-2aY5QUAutjAogg653iQEDN0_db5Y1-tudQ8pS7S-_Oz_MIphN8xv6dBc8C0yissNZ_FRfIkfu6Q"
+///  orderId = "GPA.3317-3224-8880-76256"
+///  dataAndroid = null
+///  signatureAndroid = "TElDJvEQA0PFHDfaC1Mrh0hkisXkCU7Ot/OWZ32SaTtqcICxD6zZ
+///  R3ltIBulzqXJzTQiZZ0hJKc3RfPCEXEqq0yeHDpk2BSrVR1UsDL4tjJHzTO3woCaIgbLGXxSEvRV"
+///  autoRenewingAndroid = null
+///  isAcknowledgedAndroid = true
+///  purchaseStateAndroid = {PurchaseState} PurchaseState.purchased
+///  originalJsonAndroid = null
+///  originalTransactionDateIOS = null
+///  originalTransactionIdentifierIOS = null
+PurchasedItem _getDelayedAndroidNonConsumable(
+    PurchaseState purchaseState, bool acked) {
+  PurchasedItem result = MockPurchasedItem();
+  when(result.productId).thenReturn('remove_ads_onetime');
+  when(result.transactionId).thenReturn('GPA.3317-3224-8880-76256');
+  when(result.transactionDate).thenReturn(DateTime(2021, 03, 05, 20, 20, 26));
+  when(result.transactionReceipt).thenReturn('fake-txn-receipt');
+  when(result.purchaseToken).thenReturn('fake-purchase-token');
+  when(result.orderId).thenReturn('GPA.3317-3224-8880-76256');
+  when(result.dataAndroid).thenReturn(null);
+  when(result.signatureAndroid).thenReturn('fake-signature-android');
+  when(result.autoRenewingAndroid).thenReturn(null);
+  when(result.isAcknowledgedAndroid).thenReturn(acked);
+  when(result.purchaseStateAndroid).thenReturn(purchaseState);
+  when(result.originalJsonAndroid).thenReturn(null);
+  when(result.originalTransactionDateIOS).thenReturn(null);
+  when(result.originalTransactionIdentifierIOS).thenReturn(null);
+  when(result.transactionStateIOS).thenReturn(null);
+
+  return result;
+}
+
+/// This is as pulled from a log immediately after hitting purchase, by way
+/// of the listener:
+/// # IMMEDIATELY after purchase, before processed by app
+///
+/// 0 = {map entry} "transactionReceipt" -> "MIIT9QYJKoZIhvcNAQcCoIIT5jCCE+IC
+/// AQExCzAJBgUrDgMCGgUAMIIDlgYJKoZIhvcNAQcBoIIDhwSCA4MxggN/MAoCAQgCAQEE..."
+/// 1 = {map entry} "transactionStateIOS" -> 1
+/// 2 = {map entry} "transactionDate" -> 1614827976000
+/// 3 = {map entry} "productId" -> "remove_ads_oneyear"
+/// 4 = {map entry} "transactionId" -> "1000000784255972"
+///
+///
+/// item = {PurchasedItem} productId: remove_ads_oneyear, transactionId:
+/// 1000000784255972, transactionDate: 2021-03-03T19:19:36.000, transactionReceipt: MI
+///  productId = "remove_ads_oneyear"
+///  transactionId = "1000000784255972"
+///  transactionDate = {DateTime} 2021-03-03 19:19:36.000
+///  transactionReceipt = "MIIT9QYJKoZIhvcNAQcCoIIT5jCCE+ICAQExCzAJBgUrDgMCGg
+///  UAMIIDlgYJKoZIhvcNAQcBoIIDhwSCA4MxggN/MAoCAQgCAQEEAhYAMAoCARQCAQEEAgwAMAsCAQEC"
+///  purchaseToken = null
+///  orderId = null
+///  dataAndroid = null
+///  signatureAndroid = null
+///  autoRenewingAndroid = null
+///  isAcknowledgedAndroid = null
+///  purchaseStateAndroid = null
+///  originalJsonAndroid = null
+///  originalTransactionDateIOS = null
+///  originalTransactionIdentifierIOS = null
+///  transactionStateIOS = {TransactionState} TransactionState.purchased
+PurchasedItem _getImmediateIOSNonConsumable(TransactionState txnState) {
+  PurchasedItem result = MockPurchasedItem();
+  when(result.productId).thenReturn('remove_ads_onetime');
+  when(result.transactionId).thenReturn('1000000784255972');
+  when(result.transactionDate).thenReturn(DateTime(2021, 03, 03, 19, 19, 36));
+  when(result.transactionReceipt).thenReturn(
+      'MIIT9QYJKoZIhvcNAQcCoIIT5jCCE+ICAQExCzAJBgUrDgMCGgUAMIIDlgYJKoZIhvcNAQcBoIIDhwSCA4MxggN/MAoCAQgCAQEEAhYAMAoCARQCAQEEAgwAMAsCAQEC');
+  when(result.purchaseToken).thenReturn(null);
+  when(result.orderId).thenReturn(null);
+  when(result.dataAndroid).thenReturn(null);
+  when(result.signatureAndroid).thenReturn(null);
+  when(result.autoRenewingAndroid).thenReturn(null);
+  when(result.isAcknowledgedAndroid).thenReturn(null);
+  when(result.purchaseStateAndroid).thenReturn(null);
+  when(result.originalJsonAndroid).thenReturn(null);
+  when(result.originalTransactionDateIOS).thenReturn(null);
+  when(result.originalTransactionIdentifierIOS).thenReturn(null);
+  when(result.transactionStateIOS).thenReturn(txnState);
+
+  return result;
+}
+
+/// This is from getAvailablePurchaseHistory(), the equivalent of restoring a
+/// transaction. I've only ever seen `restored` state here, but there could
+/// be others.
+///  product = {_InternalLinkedHashMap} size = 7
+///  0 = {map entry} "transactionReceipt" -> "MIIUEgYJKoZIhvcNAQcCoIIUAzCCE/8
+///  CAQExCzAJBgUrDgMCGgUAMIIDswYJKoZIhvcNAQcBoIIDpASCA6AxggOcMAoCAQgCAQEE..."
+///  1 = {map entry} "productId" -> "remove_ads_oneyear"
+///  2 = {map entry} "transactionId" -> "1000000784257330"
+///  3 = {map entry} "originalTransactionDateIOS" -> 1614827978000.0
+///  4 = {map entry} "originalTransactionIdentifierIOS" -> "1000000784255972"
+///  5 = {map entry} "transactionStateIOS" -> 3
+///  6 = {map entry} "transactionDate" -> 1614827976000.0
+///
+///
+///  item = {PurchasedItem} productId: remove_ads_oneyear, transactionId:
+///  1000000784257330, transactionDate: 2021-03-03T19:19:36.000, transactionReceipt: MI
+///  productId = "remove_ads_oneyear"
+///  transactionId = "1000000784257330"
+///  transactionDate = {DateTime} 2021-03-03 19:19:36.000
+///  transactionReceipt = "MIIUEgYJKoZIhvcNAQcCoIIUAzCCE/8CAQExCzAJBgUrDgMCGg
+///  UAMIIDswYJKoZIhvcNAQcBoIIDpASCA6AxggOcMAoCAQgCAQEEAhYAMAoCARQCAQEEAgwAMAsCAQEC"
+///  purchaseToken = null
+///  orderId = null
+///  dataAndroid = null
+///  signatureAndroid = null
+///  autoRenewingAndroid = null
+///  isAcknowledgedAndroid = null
+///  purchaseStateAndroid = null
+///  originalJsonAndroid = null
+///  originalTransactionDateIOS = {DateTime} 2021-03-03 19:19:38.000
+///  originalTransactionIdentifierIOS = "1000000784255972"
+///  transactionStateIOS = {TransactionState} TransactionState.restored
+PurchasedItem _getRestoredIOSNonConsumable() {
+  PurchasedItem result = MockPurchasedItem();
+  when(result.productId).thenReturn('remove_ads_onetime');
+  when(result.transactionId).thenReturn('1000000784257330');
+  when(result.transactionDate).thenReturn(DateTime(2021, 03, 03, 19, 19, 36));
+  when(result.transactionReceipt).thenReturn(
+      'MIIUEgYJKoZIhvcNAQcCoIIUAzCCE/8CAQExCzAJBgUrDgMCGgUAMIIDswYJKoZIhvcNAQcBoIIDpASCA6AxggOcMAoCAQgCAQEEAhYAMAoCARQCAQEEAgwAMAsCAQEC');
+  when(result.purchaseToken).thenReturn(null);
+  when(result.orderId).thenReturn(null);
+  when(result.dataAndroid).thenReturn(null);
+  when(result.signatureAndroid).thenReturn(null);
+  when(result.autoRenewingAndroid).thenReturn(null);
+  when(result.isAcknowledgedAndroid).thenReturn(null);
+  when(result.purchaseStateAndroid).thenReturn(null);
+  when(result.originalJsonAndroid).thenReturn(null);
+  when(result.originalTransactionDateIOS)
+      .thenReturn(DateTime(2021, 03, 03, 19, 19, 38));
+  when(result.originalTransactionIdentifierIOS).thenReturn('1000000784255972');
+  when(result.transactionStateIOS).thenReturn(TransactionState.restored);
+
+  return result;
+}
+
+Future<void> _runAndroidNonConsumableTestCase(
+    _AndroidNonConsumableTestCase testCase, bool isImmediate) async {
+  PurchasedItem item = isImmediate
+      ? _getImmediateAndroidNonConsumable(
+          testCase.purchaseState, testCase.isAcked)
+      : _getDelayedAndroidNonConsumable(
+          testCase.purchaseState, testCase.isAcked);
+
+  IAPPlugin3PWrapper plugin = MockPluginWrapper();
+
+  bool calledFinishTransaction = false;
+
+  when(plugin.finishTransaction(any)).thenAnswer((realInvocation) async {
+    calledFinishTransaction = true;
+    return 'finished-txn';
+  });
+
+  List<PurchasedItem> purchases = [
+    item,
+  ];
+
+  var availablePurchasesResult = Completer<List<PurchasedItem>>();
+
+  TestIAPManager mgr = _buildInitializingIAPManager(
+    mockedPlugin: plugin,
+    iosSecret: 'foo',
+    initialState: TestStoreState.defaultState(true, PlatformWrapper.android()),
+    answerGetAvailablePurchases: () => availablePurchasesResult.future,
+    answerGetProducts: () => Future.value([]),
+    answerGetSubscriptions: () => Future.value([]),
+    platformWrapper: PlatformWrapper.android(),
+  );
+
+  await mgr.waitForInitialized();
+
+  expect(mgr.isLoaded, isTrue);
+  expect(mgr.pluginErrorMsg, isNull);
+  expect(mgr.storeState.shouldShowAds(), isTrue);
+  expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+  expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
+
+  Future<void> result = mgr.getAvailablePurchases(true);
+
+  expect(mgr.isLoaded, isFalse);
+
+  // And now return the getAvailablePurchases with our items.
+  availablePurchasesResult.complete(purchases);
+
+  // Let everything complete.
+  await result;
+
+  expect(mgr.isLoaded, isTrue);
+  expect(mgr.pluginErrorMsg, isNull);
+
+  if (testCase.wantNoAdsForeverOwned) {
+    expect(mgr.storeState.noAdsForever.owned, isOwned);
+    expect(mgr.storeState.shouldShowAds(), isFalse);
+  } else {
+    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+    expect(mgr.storeState.shouldShowAds(), isTrue);
+  }
+
+  expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
+
+  expect(calledFinishTransaction, equals(testCase.wantDidFinishTransaction));
+}
+
 void main() {
   test('initialize happy path', () async {
     IAPPlugin3PWrapper plugin = MockPluginWrapper();
@@ -988,196 +1315,59 @@ void main() {
     expect(calledFinishTransaction, isFalse);
   });
 
-  test('getAvailablePurchases() android: one-time pending is not owned',
-      () async {
-    // If a purchase is pending, we don't yet own it.
-    PurchasedItem shouldIgnorePending = MockPurchasedItem();
-    when(shouldIgnorePending.transactionId).thenReturn('txn-id');
-    when(shouldIgnorePending.purchaseStateAndroid)
-        .thenReturn(PurchaseState.pending);
-    when(shouldIgnorePending.productId).thenReturn('remove_ads_onetime');
-    when(shouldIgnorePending.isAcknowledgedAndroid).thenReturn(false);
-
-    IAPPlugin3PWrapper plugin = MockPluginWrapper();
-
-    bool calledFinishTransaction = false;
-    when(plugin.finishTransaction(any)).thenAnswer((realInvocation) async {
-      calledFinishTransaction = true;
-      return 'acked';
+  <_AndroidNonConsumableTestCase>[
+    _AndroidNonConsumableTestCase(
+      label: 'purchased, acked',
+      purchaseState: PurchaseState.purchased,
+      isAcked: true,
+      wantDidFinishTransaction: false,
+      wantNoAdsForeverOwned: true,
+    ),
+    _AndroidNonConsumableTestCase(
+      label: 'purchased, unacked',
+      purchaseState: PurchaseState.purchased,
+      isAcked: false,
+      wantDidFinishTransaction: true,
+      wantNoAdsForeverOwned: true,
+    ),
+    _AndroidNonConsumableTestCase(
+      label: 'pending, acked',
+      purchaseState: PurchaseState.pending,
+      isAcked: true,
+      wantDidFinishTransaction: false,
+      wantNoAdsForeverOwned: false,
+    ),
+    _AndroidNonConsumableTestCase(
+      label: 'pending, unacked',
+      purchaseState: PurchaseState.pending,
+      isAcked: false,
+      wantDidFinishTransaction: false,
+      wantNoAdsForeverOwned: false,
+    ),
+    _AndroidNonConsumableTestCase(
+      label: 'unspecified, acked',
+      purchaseState: PurchaseState.unspecified,
+      isAcked: true,
+      wantDidFinishTransaction: false,
+      wantNoAdsForeverOwned: false,
+    ),
+    _AndroidNonConsumableTestCase(
+      label: 'unspecified, unacked',
+      purchaseState: PurchaseState.unspecified,
+      isAcked: false,
+      wantDidFinishTransaction: false,
+      wantNoAdsForeverOwned: false,
+    ),
+  ].forEach((testCase) {
+    test('android getAvailableNonConsumable DELAYED: ${testCase.label}',
+        () async {
+      await _runAndroidNonConsumableTestCase(testCase, false);
     });
 
-    List<PurchasedItem> purchases = [
-      shouldIgnorePending,
-    ];
-
-    var pluginResult = Completer<List<PurchasedItem>>();
-
-    TestIAPManager mgr = _buildInitializingIAPManager(
-      mockedPlugin: plugin,
-      iosSecret: 'foo',
-      initialState:
-          TestStoreState.defaultState(true, PlatformWrapper.android()),
-      answerGetAvailablePurchases: () => pluginResult.future,
-      answerGetProducts: () => Future.value([]),
-      answerGetSubscriptions: () => Future.value([]),
-      platformWrapper: PlatformWrapper.android(),
-    );
-
-    await mgr.waitForInitialized();
-
-    expect(mgr.isLoaded, isTrue);
-    expect(mgr.storeState.shouldShowAds(), isTrue);
-    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
-    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-
-    Future<void> result = mgr.getAvailablePurchases(true);
-
-    expect(mgr.isLoaded, isFalse);
-
-    // And now return the getAvailablePurchases with our items.
-    pluginResult.complete(purchases);
-
-    // Let everything complete.
-    await result;
-
-    expect(mgr.isLoaded, isTrue);
-    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
-    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.storeState.shouldShowAds(), isTrue);
-
-    expect(calledFinishTransaction, isFalse);
-  });
-
-  test('getAvailablePurchases() android: one-time purchased, needs ack',
-      () async {
-    PurchasedItem needsAck = MockPurchasedItem();
-    when(needsAck.transactionId).thenReturn('txn-id');
-    when(needsAck.purchaseStateAndroid).thenReturn(PurchaseState.purchased);
-    when(needsAck.isAcknowledgedAndroid).thenReturn(false);
-    when(needsAck.productId).thenReturn('remove_ads_onetime');
-
-    IAPPlugin3PWrapper plugin = MockPluginWrapper();
-
-    bool calledFinishTransaction = false;
-
-    when(plugin.finishTransaction(any)).thenAnswer((realInvocation) async {
-      var purchasedItem = realInvocation.positionalArguments[0];
-      if (purchasedItem.transactionId == 'txn-id') {
-        calledFinishTransaction = true;
-        return 'android-result';
-      }
-      throw new Exception(
-          'unrecognized transaction id: ${purchasedItem.transactionId}');
+    test('android getAvailableNonConsumable IMMEDIATE: ${testCase.label}',
+        () async {
+      await _runAndroidNonConsumableTestCase(testCase, true);
     });
-
-    List<PurchasedItem> purchases = [
-      needsAck,
-    ];
-
-    var availablePurchasesResult = Completer<List<PurchasedItem>>();
-
-    // Start showing ads, then make sure we stop showing ads once we have
-    // purchases.
-    TestIAPManager mgr = _buildInitializingIAPManager(
-      mockedPlugin: plugin,
-      iosSecret: 'foo',
-      initialState:
-          TestStoreState.defaultState(true, PlatformWrapper.android()),
-      answerGetAvailablePurchases: () => availablePurchasesResult.future,
-      answerGetProducts: () => Future.value([]),
-      answerGetSubscriptions: () => Future.value([]),
-      platformWrapper: PlatformWrapper.android(),
-    );
-
-    await mgr.waitForInitialized();
-
-    expect(mgr.isLoaded, isTrue);
-    expect(mgr.storeState.shouldShowAds(), isTrue);
-    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
-    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-
-    Future<void> result = mgr.getAvailablePurchases(true);
-
-    expect(mgr.isLoaded, isFalse);
-
-    // And now return the getAvailablePurchases with our items.
-    availablePurchasesResult.complete(purchases);
-
-    // Let everything complete.
-    await result;
-
-    expect(mgr.isLoaded, isTrue);
-    expect(mgr.storeState.noAdsForever.owned, isOwned);
-    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.storeState.shouldShowAds(), isFalse);
-
-    expect(calledFinishTransaction, isTrue);
-  });
-
-  test('getAvailablePurchases() android: one-time purchased and acked',
-      () async {
-    PurchasedItem acked = MockPurchasedItem();
-    when(acked.transactionId).thenReturn('txn-id');
-    when(acked.purchaseStateAndroid).thenReturn(PurchaseState.purchased);
-    when(acked.isAcknowledgedAndroid).thenReturn(true);
-    when(acked.productId).thenReturn('remove_ads_oneyear');
-
-    IAPPlugin3PWrapper plugin = MockPluginWrapper();
-
-    bool calledFinishTransaction = false;
-
-    when(plugin.finishTransaction(any)).thenAnswer((realInvocation) async {
-      var purchasedItem = realInvocation.positionalArguments[0];
-      if (purchasedItem.transactionId == 'txn-id') {
-        calledFinishTransaction = true;
-        return 'android-result';
-      }
-      throw new Exception(
-          'unrecognized transaction id: ${purchasedItem.transactionId}');
-    });
-
-    List<PurchasedItem> purchases = [
-      acked,
-    ];
-
-    var availablePurchasesResult = Completer<List<PurchasedItem>>();
-
-    // Start showing ads, then make sure we stop showing ads once we have
-    // purchases.
-    TestIAPManager mgr = _buildInitializingIAPManager(
-      mockedPlugin: plugin,
-      iosSecret: 'foo',
-      initialState:
-          TestStoreState.defaultState(true, PlatformWrapper.android()),
-      answerGetAvailablePurchases: () => availablePurchasesResult.future,
-      answerGetProducts: () => Future.value([]),
-      answerGetSubscriptions: () => Future.value([]),
-      platformWrapper: PlatformWrapper.android(),
-    );
-
-    await mgr.waitForInitialized();
-
-    expect(mgr.isLoaded, isTrue);
-    expect(mgr.storeState.shouldShowAds(), isTrue);
-    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
-    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-
-    Future<void> result = mgr.getAvailablePurchases(true);
-
-    expect(mgr.isLoaded, isFalse);
-
-    // And now return the getAvailablePurchases with our items.
-    availablePurchasesResult.complete(purchases);
-
-    // Let everything complete.
-    await result;
-
-    expect(mgr.isLoaded, isTrue);
-    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
-    expect(mgr.storeState.noAdsOneYear.owned, isOwned);
-    expect(mgr.storeState.shouldShowAds(), isFalse);
-
-    expect(calledFinishTransaction, isFalse);
   });
 
   <_AndroidSubscriptionTestCase>[
@@ -1277,132 +1467,110 @@ void main() {
     });
   });
 
-  test('getAvailablePurchases() ios: purchased', () async {
-    PurchasedItem purchased = MockPurchasedItem();
-    when(purchased.transactionId).thenReturn('txn-id');
-    when(purchased.transactionStateIOS).thenReturn(TransactionState.purchased);
-    when(purchased.productId).thenReturn('remove_ads_onetime');
-
-    IAPPlugin3PWrapper plugin = MockPluginWrapper();
-
-    bool calledFinish = false;
-
-    when(plugin.finishTransaction(any)).thenAnswer((realInvocation) async {
-      var purchasedItem = realInvocation.positionalArguments[0];
-      if (purchasedItem.transactionId == 'txn-id') {
-        calledFinish = true;
-        return 'ios-result';
-      }
-      throw new Exception(
-          'unrecognized transaction id: ${purchasedItem.transactionId}');
-    });
-
-    List<PurchasedItem> purchases = [
-      purchased,
-    ];
-
-    var availablePurchasesResult = Completer<List<PurchasedItem>>();
-
-    // Start showing ads, then make sure we stop showing ads once we have
-    // purchases.
-    TestIAPManager mgr = _buildInitializingIAPManager(
-      mockedPlugin: plugin,
-      iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(true, PlatformWrapper.ios()),
-      answerGetAvailablePurchases: () => availablePurchasesResult.future,
-      answerGetProducts: () => Future.value([]),
-      answerGetSubscriptions: () => Future.value([]),
-      platformWrapper: PlatformWrapper.ios(),
-    );
-
-    await mgr.waitForInitialized();
-
-    expect(mgr.isLoaded, isTrue);
-    expect(mgr.storeState.shouldShowAds(), isTrue);
-    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
-    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-
-    Future<void> result = mgr.getAvailablePurchases(true);
-
-    expect(mgr.isLoaded, isFalse);
-
-    // And now return the getAvailablePurchases with our items.
-    availablePurchasesResult.complete(purchases);
-
-    // Let everything complete.
-    await result;
-
-    expect(mgr.isLoaded, isTrue);
-    expect(mgr.pluginErrorMsg, isNull);
-    expect(mgr.storeState.noAdsForever.owned, isOwned);
-    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.storeState.shouldShowAds(), isFalse);
-
-    expect(calledFinish, isTrue);
+  test('ios does not hit network on initialize', () async {
+    expect(true, isFalse);
   });
 
-  test('getAvailablePurchases() ios: purchasing', () async {
-    PurchasedItem purchasing = MockPurchasedItem();
-    when(purchasing.transactionId).thenReturn('txn-id');
-    when(purchasing.transactionStateIOS)
-        .thenReturn(TransactionState.purchasing);
-    when(purchasing.productId).thenReturn('remove_ads_onetime');
+  <_IOSGetAvailableNonConsumableTestCase>[
+    _IOSGetAvailableNonConsumableTestCase(
+      label: 'purchased',
+      wantOwned: true,
+      wantDidFinishTransaction: true,
+      item: _getImmediateIOSNonConsumable(TransactionState.purchased),
+    ),
+    _IOSGetAvailableNonConsumableTestCase(
+      label: 'restored',
+      wantOwned: true,
+      wantDidFinishTransaction: true,
+      item: _getRestoredIOSNonConsumable(),
+    ),
+    _IOSGetAvailableNonConsumableTestCase(
+      label: 'purchasing',
+      wantOwned: false,
+      wantDidFinishTransaction: false,
+      item: _getImmediateIOSNonConsumable(TransactionState.purchasing),
+    ),
+    _IOSGetAvailableNonConsumableTestCase(
+      label: 'deferred',
+      wantOwned: false,
+      wantDidFinishTransaction: false,
+      item: _getImmediateIOSNonConsumable(TransactionState.deferred),
+    ),
+    _IOSGetAvailableNonConsumableTestCase(
+      label: 'failed',
+      wantOwned: false,
+      wantDidFinishTransaction: true,
+      item: _getImmediateIOSNonConsumable(TransactionState.failed),
+    ),
+  ].forEach((testCase) {
+    test('ios getAvailableProducts: ${testCase.label}', () async {
+      IAPPlugin3PWrapper plugin = MockPluginWrapper();
 
-    IAPPlugin3PWrapper plugin = MockPluginWrapper();
+      bool calledFinish = false;
 
-    bool calledFinish = false;
-
-    when(plugin.finishTransaction(any)).thenAnswer((realInvocation) async {
-      var purchasedItem = realInvocation.positionalArguments[0];
-      if (purchasedItem.transactionId == 'txn-id') {
+      when(plugin.finishTransaction(any)).thenAnswer((_) async {
         calledFinish = true;
-        return 'ios-result';
+        return 'finished';
+      });
+
+      List<PurchasedItem> purchases = [
+        testCase.item,
+      ];
+
+      var availablePurchasesResult = Completer<List<PurchasedItem>>();
+      bool calledGetAvailablePurchases = false;
+      var answerGetAvailablePurchases = () {
+        calledGetAvailablePurchases = true;
+        return availablePurchasesResult.future;
+      };
+
+      // Start showing ads, then make sure we stop showing ads once we have
+      // purchases.
+      TestIAPManager mgr = _buildInitializingIAPManager(
+        mockedPlugin: plugin,
+        iosSecret: 'foo',
+        initialState: TestStoreState.defaultState(true, PlatformWrapper.ios()),
+        answerGetAvailablePurchases: answerGetAvailablePurchases,
+        answerGetProducts: () => Future.value([]),
+        answerGetSubscriptions: () => Future.value([]),
+        platformWrapper: PlatformWrapper.ios(),
+      );
+
+      await mgr.waitForInitialized();
+      expect(calledGetAvailablePurchases, isFalse);
+      expect(mgr.isLoaded, isTrue);
+      expect(mgr.pluginErrorMsg, isNull);
+
+      expect(mgr.storeState.shouldShowAds(), isTrue);
+      expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+      expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
+
+      Future<void> result = mgr.getAvailablePurchases(true);
+
+      expect(mgr.isLoaded, isFalse);
+
+      // And now return the getAvailablePurchases with our items.
+      availablePurchasesResult.complete(purchases);
+
+      // Let everything complete.
+      await result;
+
+      expect(mgr.isLoaded, isTrue);
+      expect(mgr.pluginErrorMsg, isNull);
+      expect(calledGetAvailablePurchases, isTrue);
+
+      if (testCase.wantOwned) {
+        expect(mgr.storeState.noAdsForever.owned, isOwned);
+        expect(mgr.storeState.shouldShowAds(), isFalse);
+      } else {
+        expect(mgr.storeState.noAdsForever.owned, isNotOwned);
+        expect(mgr.storeState.shouldShowAds(), isTrue);
       }
-      throw new Exception(
-          'unrecognized transaction id: ${purchasedItem.transactionId}');
+
+      expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
+
+      expect(calledFinish, equals(testCase.wantDidFinishTransaction));
     });
-
-    List<PurchasedItem> purchases = [
-      purchasing,
-    ];
-
-    var availablePurchasesResult = Completer<List<PurchasedItem>>();
-
-    // Start showing ads, then make sure we stop showing ads once we have
-    // purchases.
-    TestIAPManager mgr = _buildInitializingIAPManager(
-      mockedPlugin: plugin,
-      iosSecret: 'foo',
-      initialState: TestStoreState.defaultState(true, PlatformWrapper.ios()),
-      answerGetAvailablePurchases: () => availablePurchasesResult.future,
-      answerGetProducts: () => Future.value([]),
-      answerGetSubscriptions: () => Future.value([]),
-      platformWrapper: PlatformWrapper.ios(),
-    );
-
-    await mgr.waitForInitialized();
-
-    expect(mgr.isLoaded, isTrue);
-    expect(mgr.storeState.shouldShowAds(), isTrue);
-    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
-    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-
-    Future<void> result = mgr.getAvailablePurchases(true);
-
-    expect(mgr.isLoaded, isFalse);
-
-    // And now return the getAvailablePurchases with our items.
-    availablePurchasesResult.complete(purchases);
-
-    // Let everything complete.
-    await result;
-
-    expect(mgr.isLoaded, isTrue);
-    expect(mgr.storeState.noAdsForever.owned, isNotOwned);
-    expect(mgr.storeState.noAdsOneYear.owned, isNotOwned);
-    expect(mgr.storeState.shouldShowAds(), isTrue);
-
-    expect(calledFinish, isFalse);
   });
 
   test('getAvailablePurchases() ios: purchased subs', () async {
@@ -1739,8 +1907,8 @@ void main() {
     expect(numTimesCalledFinish, equals(5));
   });
 
-  <_SubValidationFailsTestCase>[
-    _SubValidationFailsTestCase(
+  <_IOSNativeSubValidationFailsTestCase>[
+    _IOSNativeSubValidationFailsTestCase(
       label: 'validation parses, sub is expired',
       respCode: 200,
       respBody: '{"status":0, "pending_renewal_info": [ { "'
@@ -1750,7 +1918,7 @@ void main() {
       wantShowAds: true,
       wantOwnedState: OwnedState.NOT_OWNED,
     ),
-    _SubValidationFailsTestCase(
+    _IOSNativeSubValidationFailsTestCase(
       label: 'HTTP 404 code',
       respCode: 404,
       respBody: 'not home right now',
@@ -1759,7 +1927,7 @@ void main() {
       wantShowAds: false,
       wantOwnedState: OwnedState.UNKNOWN,
     ),
-    _SubValidationFailsTestCase(
+    _IOSNativeSubValidationFailsTestCase(
       label: 'non-ok server status',
       respCode: 200,
       respBody: '{"status":100}',
@@ -1768,7 +1936,7 @@ void main() {
       wantShowAds: false,
       wantOwnedState: OwnedState.UNKNOWN,
     ),
-    _SubValidationFailsTestCase(
+    _IOSNativeSubValidationFailsTestCase(
       label: 'bad json',
       respCode: 200,
       respBody: '{"status_is_broken',
@@ -1777,7 +1945,7 @@ void main() {
       wantShowAds: false,
       wantOwnedState: OwnedState.UNKNOWN,
     ),
-    _SubValidationFailsTestCase(
+    _IOSNativeSubValidationFailsTestCase(
       label: 'missing pending_renewal_info',
       respCode: 200,
       respBody: '{"status":0}',
@@ -1786,7 +1954,7 @@ void main() {
       wantShowAds: true,
       wantOwnedState: OwnedState.NOT_OWNED,
     ),
-    _SubValidationFailsTestCase(
+    _IOSNativeSubValidationFailsTestCase(
       label: 'pending_renewal_info is string, not array',
       respCode: 200,
       respBody: '{"status":0, "pending_renewal_info": "trubs" }',
@@ -1795,7 +1963,7 @@ void main() {
       wantShowAds: false,
       wantOwnedState: OwnedState.UNKNOWN,
     ),
-    _SubValidationFailsTestCase(
+    _IOSNativeSubValidationFailsTestCase(
       label: 'pending_renewal_info is object, not array',
       respCode: 200,
       respBody: '{"status":0, "pending_renewal_info": {"cat": "dog" } }',
@@ -1804,7 +1972,7 @@ void main() {
       wantShowAds: false,
       wantOwnedState: OwnedState.UNKNOWN,
     ),
-    _SubValidationFailsTestCase(
+    _IOSNativeSubValidationFailsTestCase(
       label: 'pending_renewal_info empty array',
       respCode: 200,
       respBody: '{"status":0, "pending_renewal_info": [ ] }',
@@ -1813,7 +1981,7 @@ void main() {
       wantShowAds: true,
       wantOwnedState: OwnedState.NOT_OWNED, // should be one if active
     ),
-    _SubValidationFailsTestCase(
+    _IOSNativeSubValidationFailsTestCase(
       label: 'pending_renewal_info array of wrong objs',
       respCode: 200,
       respBody: '{"status":0, "pending_renewal_info": [ { "cat": "dog" } ] }',
@@ -2894,7 +3062,7 @@ void main() {
     expect(mgr.pluginErrorMsg, isNull);
   });
 
-  test('during initialize no calls to products', () async {
+  test('during initialize no duplicate calls to products', () async {
     var items = _MockedIAPItems();
 
     IAPPlugin3PWrapper plugin = MockPluginWrapper();
