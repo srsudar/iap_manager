@@ -145,12 +145,25 @@ class _IOSGetAvailableNonConsumableTestCase {
 
 class _InitializeHitsNetworkTestCase {
   final String label;
-  final bool isAndroid;
-  final bool isIOS;
+  final PlatformWrapper platform;
   final bool wantHitsNetwork;
 
   _InitializeHitsNetworkTestCase(
-      {this.label, this.isAndroid, this.isIOS, this.wantHitsNetwork});
+      {this.label, this.platform, this.wantHitsNetwork});
+}
+
+class _RefreshStateTestCase {
+  final String label;
+  final PlatformWrapper platform;
+  final bool wantFetchedProducts;
+  final bool wantFetchedPurchases;
+
+  _RefreshStateTestCase({
+    this.label,
+    this.platform,
+    this.wantFetchedProducts,
+    this.wantFetchedPurchases,
+  });
 }
 
 class _MockedIAPItems {
@@ -1356,24 +1369,84 @@ void main() {
     });
   });
 
+  <_RefreshStateTestCase>[
+    _RefreshStateTestCase(
+      label: 'android refreshes both',
+      platform: PlatformWrapper.android(),
+    ),
+    _RefreshStateTestCase(
+      label: 'ios refreshes only products',
+      platform: PlatformWrapper.ios(),
+    ),
+  ].forEach((testCase) {
+    test('refreshState: ${testCase.label}', () async {
+      IAPPlugin3PWrapper plugin = MockPluginWrapper();
+
+      int numTimesCalledGetPurchases = 0;
+      var answerGetAvailablePurchases = () async {
+        numTimesCalledGetPurchases++;
+        return <PurchasedItem>[];
+      };
+
+      int numTimesCalledGetProducts = 0;
+      var answerGetProducts = () async {
+        numTimesCalledGetProducts++;
+        return <IAPItem>[];
+      };
+
+      int numTimesCalledGetSubscriptions = 0;
+      var answerGetSubscriptions = () async {
+        numTimesCalledGetSubscriptions++;
+        return <IAPItem>[];
+      };
+
+      // Start showing ads, then make sure we stop showing ads once we have
+      // purchases.
+      TestIAPManager mgr = _buildNeedsInitializeIAPManager(
+        mockedPlugin: plugin,
+        initialState: TestStoreState.defaultState(true, testCase.platform),
+        answerGetAvailablePurchases: answerGetAvailablePurchases,
+        answerGetProducts: answerGetProducts,
+        answerGetSubscriptions: answerGetSubscriptions,
+        platformWrapper: testCase.platform,
+      );
+
+      await mgr.waitForInitialized();
+      expect(mgr.isLoaded, isTrue);
+      expect(mgr.pluginErrorMsg, isNull);
+
+      expect(mgr.storeState.shouldShowAds(), isTrue);
+
+      await mgr.refreshState();
+
+      if (testCase.platform.isAndroid) {
+        // we call once in init, and once after refresh state
+        expect(numTimesCalledGetSubscriptions, equals(2));
+        expect(numTimesCalledGetProducts, equals(2));
+        expect(numTimesCalledGetPurchases, equals(2));
+      }
+
+      if (testCase.platform.isIOS) {
+        expect(numTimesCalledGetSubscriptions, equals(1));
+        expect(numTimesCalledGetProducts, equals(1));
+        expect(numTimesCalledGetPurchases, equals(0));
+      }
+    });
+  });
+
   <_InitializeHitsNetworkTestCase>[
     _InitializeHitsNetworkTestCase(
       label: 'android hits network',
-      isAndroid: true,
-      isIOS: false,
+      platform: PlatformWrapper.android(),
       wantHitsNetwork: true,
     ),
     _InitializeHitsNetworkTestCase(
       label: 'ios does not network',
-      isAndroid: false,
-      isIOS: true,
+      platform: PlatformWrapper.ios(),
       wantHitsNetwork: false,
     ),
   ].forEach((testCase) {
     test('initialize hits network: ${testCase.label}', () async {
-      if (testCase.isIOS == testCase.isAndroid) {
-        throw Exception('configuration error, can only be one platform');
-      }
       IAPPlugin3PWrapper plugin = MockPluginWrapper();
 
       bool calledGetAvailablePurchases = false;
@@ -1398,13 +1471,11 @@ void main() {
       // purchases.
       TestIAPManager mgr = _buildNeedsInitializeIAPManager(
         mockedPlugin: plugin,
-        initialState: TestStoreState.defaultState(true, PlatformWrapper.ios()),
+        initialState: TestStoreState.defaultState(true, testCase.platform),
         answerGetAvailablePurchases: answerGetAvailablePurchases,
         answerGetProducts: answerGetProducts,
         answerGetSubscriptions: answerGetSubscriptions,
-        platformWrapper: testCase.isAndroid
-            ? PlatformWrapper.android()
-            : PlatformWrapper.ios(),
+        platformWrapper: testCase.platform,
       );
 
       await mgr.waitForInitialized();
@@ -2572,17 +2643,18 @@ void main() {
     expect(mgr.isLoaded, isTrue);
     expect(mgr.isStillInitializing, isFalse);
 
-    var result = mgr.fetchStoreState(true);
+    var result = mgr.getAvailablePurchases(true);
 
-    expect(mgr.isLoaded, false);
+    expect(mgr.isLoaded, isFalse);
 
     pluginGetAvailablePurchasesResult.complete([]);
+
+    await result;
 
     _MockedIAPItems items = _MockedIAPItems();
     products.complete([items.forLife]);
     subs.complete([items.forOneYear]);
-
-    await result;
+    await mgr.getAvailableProducts(true);
 
     expect(mgr.storeState.noAdsForever.getTitle(), equals('Title One Time'));
     expect(mgr.storeState.noAdsOneYear.getTitle(), equals('Title One Year'));

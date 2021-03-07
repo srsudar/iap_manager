@@ -243,7 +243,8 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
 
     // Don't fetch products by default on iOS, because their API is clunkier.
     if (_platformWrapper.isAndroid) {
-      await fetchStoreState(false);
+      await getAvailablePurchases(false);
+      await getAvailableProducts(false);
     }
 
     _isLoaded = true;
@@ -418,11 +419,22 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     _cxnIsInitialized = false;
   }
 
-  /// Fetch product and purchase state from the store. This is equivalent to
-  /// calling getAvailableProducts and getAvailablePurchases.
-  Future<void> fetchStoreState(bool takeOwnershipOfLoading) async {
-    await getAvailablePurchases(takeOwnershipOfLoading);
-    await getAvailableProducts(takeOwnershipOfLoading);
+  /// Fetch state from the store that can be fetched without user
+  /// intervention. On iOS, therefore, this does not fetch purchase history,
+  /// since that requires users to log in to the App Store (see
+  /// getAvailablePurchase).
+  ///
+  /// Instead, this method is safe to call whenever the purchases UI is
+  /// presented.
+  Future<void> refreshState() async {
+    if (_platformWrapper.isAndroid) {
+      await getAvailablePurchases(true);
+      await getAvailableProducts(true);
+    } else if (_platformWrapper.isIOS) {
+      await getAvailableProducts(true);
+    } else {
+      _logger.maybeLog('refreshState: unrecognized platform');
+    }
   }
 
   /// Get available purchases from the store. When this future completes, the
@@ -432,11 +444,12 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
   /// This method will also call notifyListeners as appropriate, so if you are
   /// using it as a Provider, you do not need to await the future.
   ///
-  /// restoreIfIOS is true to get historical purchases on iOS (this is
-  /// ignored on Android). On Android, it is cheap to get all available
-  /// purchases. This is not true on iOS, where the user can be prompted to
-  /// log in to the store. This might be jarring, so it should only be called
-  /// when this is intended.
+  /// This method performs the "restore purchases" action on iOS. This means
+  /// that it asks users to log into their app store account, and returns
+  /// results that have PurchaseState == restored. You might consider
+  /// avoiding this on app load, eg, because it can surprise users to be
+  /// asked to log into their App Store account without knowing why they are
+  /// being asked.
   Future<void> getAvailablePurchases(bool takeOwnershipOfLoading) async {
     _logger.maybeLog('getAvailablePurchases'
         '(takeOwnershipOfLoading: $takeOwnershipOfLoading)');
