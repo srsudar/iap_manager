@@ -511,11 +511,6 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
     _notifyListenersWithReporter();
   }
 
-  /// Prepare to display this screen to the user.
-  Future<void> loadInfoForDisplay() async {
-    throw Exception('unimplemented');
-  }
-
   /// Get available products from the store. When this future completes, the
   /// StateFromStore will contain any results that were fetched.
   ///

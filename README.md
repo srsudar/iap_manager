@@ -36,12 +36,6 @@ post](https://medium.com/codechai/flutter-in-app-purchase-7a3fb9345e2a) that is
 helpful. You'll also need the proguard rules for when you build a release
 version.
 
-On iOS, if you have subscriptions, you'll also need an "App-Specific Shared
-Secret" that serves as a password for Apple's validation server. This is on [App
-Store Connect](https://appstoreconnect.apple.com/apps). Click on your app and go
-to `In-App Purchase | Manage`. Above the list of purchases you'll see
-"App-Specific Shared Secret". Click that, generate a secret, and save it.
-
 ### Classes
 
 #### `IAPManager`
@@ -49,6 +43,17 @@ to `In-App Purchase | Manage`. Above the list of purchases you'll see
 The main class this package provides is the `IAPManager`. It is a
 [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html),
 which will hopefully make it easy for you to integrate into your app.
+
+When you create an `IAPManager`, it will begin listening to for purchase
+updates. On Android, you will always get the latest purchase state because Play
+Services caches the purchases locally and makes querying simple. On iOS,
+purchases aren't requested from the store unless you call
+`getAvailablePurchases`. This is the mechanism that provides the "Restore State"
+button required by Apple--it asks users to log in to the App Store, and it then
+fetches any purchases, setting purchase state to `restored`. Best practice on
+iOS appears to be caching the results of the first purchase yourself, and
+validating the purchase with your own server before use.
+
 
 #### `InAppProduct`
 
@@ -70,8 +75,19 @@ testing.
 #### `PlatformWrapper`
 
 This is a simple wrapper around `Platform`. If you want to simulate an Android
-environment, you can pass `PlatformWrapper.andoid()`. In production, just use
+environment, you can pass `PlatformWrapper.android()`. In production, just use
 `PlatformWrapper()`.
+
+#### `PurchaseVerifier`
+
+This is a class you can implement to perform server-side validation of IAPs.
+If you don't use any server-side validation, and instead trust what you see
+on the device, you can leave this parameter unset.
+
+If you are using iOS subscriptions, there is any way to tell on-device if the
+subscription is valid. The `IOSSubscriptionHelper` class is provided to help
+determine if a subscription is valid. You can use that in a custom
+`PurchaseVerifier` to determine if subscriptions are active.
 
 ### Integrating iap_manager Into Your App
 
@@ -149,18 +165,18 @@ Instead, I like to subclass `IAPManager` so that I can't commit that error.
 class TestIAPManager extends IAPManager<TestStoreState> {
   TestIAPManager(
     IAPPlugin3PWrapper plugin,
-    String iosSharedSecret,
     TestStoreState storeState,
     bool initialShouldShowAds,
     void Function() notifyListenersInvokedCallback,
     PlatformWrapper platformWrapper,
+    {PurchaseVerifier purchaseVerifier},
   ) : super(
           plugin,
-          iosSharedSecret,
           storeState,
           initialShouldShowAds,
           notifyListenersInvokedCallback,
           platformWrapper,
+          purchaseVerifier: purchaseVerifier,
         );
 }
 ```
@@ -193,7 +209,6 @@ This is the root function of an app that uses iap_manager:
         create: (_) {
           return TestIAPManager(
             IAPPlugin3PWrapper(),
-            IOS_APP_SECRET,
             TestStoreState.defaultState(),
             initialShouldShowAds,
             null,
@@ -219,7 +234,3 @@ them, so I haven't implemented them.
 
 * **No consumable items**. IAPs like coins that you can spend are something that
     I haven't looked into, so they're not supported at the moment.
-* **No first-party validation of purchases.** You can probably still do this
-    yourself using this package, but since it does validate subscriptions (on
-    iOS at least), it might be nice to provide a cleaner hook for this.
-    Nevertheless, for now it does not.

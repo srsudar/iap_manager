@@ -1,3 +1,12 @@
+## [0.1.0] - 2021-03-07
+
+* Don't contact the App Store when initializing on iOS. This allows callers to
+be more precise about when they want the user to be asked to log in to the App
+Store.
+* Add a parameter to verify purchases against your own server.
+* Remove default iOS subscription validation.
+
+
 ## [0.0.3] - 2021-03-01
 
 * Avoid `isAcknowledgedAndroid` on Android subscriptions, which the plugin
