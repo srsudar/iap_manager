@@ -78,6 +78,15 @@ abstract class PurchaseVerifier {
   Future<PurchaseVerificationResult> verifyPurchase(PurchasedItem item);
 }
 
+/// Returns true if the error is due to a user cancelation. This can happen
+/// on restore purchases, eg, if the user cancels it.
+bool _isUserCanceledErr(dynamic err) {
+  if (err == null) {
+    return false;
+  }
+  return err.toString().contains('E_USER_CANCELLED');
+}
+
 /// Manages in-app purchases. This is essentially a wrapper around the
 /// libraries that we are using, hoping to abstract away any issues so that
 /// future decisions to swap them should be easy.
@@ -494,10 +503,12 @@ class IAPManager<T extends StateFromStore> extends ChangeNotifier {
       _storeState = _storeState.setNotOwnedExcept(handledPurchaseIDs);
       _logger.maybeLog('new state: $_storeState');
     } catch (e) {
-      _logger.maybeLog('getAvailablePurchases: ugly universal catch '
-          'block: '
-          '$e');
-      _pluginErrorMsg = e.toString();
+      if (!_isUserCanceledErr(e)) {
+        _logger.maybeLog('getAvailablePurchases: ugly universal catch '
+            'block: '
+            '$e');
+        _pluginErrorMsg = e.toString();
+      }
     }
 
     if (takeOwnershipOfLoading) {
