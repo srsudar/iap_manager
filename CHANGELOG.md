@@ -1,3 +1,10 @@
+## [0.1.1] - 2021-03-10
+
+* Don't interpret user cancellation as an error during
+`getAvailablePurchases()`. This was showing an error (even though it's not
+really an error state) on iOS when someone restored purchases but hit the cancel
+button when asked to sign in.
+
 ## [0.1.0] - 2021-03-07
 
 * Don't contact the App Store when initializing on iOS. This allows callers to
